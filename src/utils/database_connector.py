@@ -1,10 +1,7 @@
 import mysql.connector
 from dotenv import load_dotenv
 import os
-import logging
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from src.logger import logging
 
 def connect_to_database():
     try:
@@ -15,10 +12,10 @@ def connect_to_database():
             host=os.getenv('MYSQL_HOST'),
             database=os.getenv('MYSQL_DATABASE')
         )
-        logger.info("Successfully connected to the database.")
+        logging.info("Successfully connected to the database.")
         return conn
     except mysql.connector.Error as err:
-        logger.error("Error connecting to the database: %s", err)
+        logging.error("Error connecting to the database: %s", err)
         return None
 
 if __name__ == "__main__":
