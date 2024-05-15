@@ -1,7 +1,0 @@
-pyspark
-pandas
-numpy
-ipykernel
-Faker
-mysql-connector-python
-python-dotenv
