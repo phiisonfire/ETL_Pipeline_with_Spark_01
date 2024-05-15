@@ -1,9 +1,10 @@
 import mysql.connector
+from mysql.connector.connection_cext import CMySQLConnection
 from dotenv import load_dotenv
 import os
 from src.logger import logging
 
-def connect_to_database():
+def connect_to_database() -> CMySQLConnection:
     try:
         load_dotenv()
         conn = mysql.connector.connect(
@@ -13,6 +14,7 @@ def connect_to_database():
             database=os.getenv('MYSQL_DATABASE')
         )
         logging.info("Successfully connected to the database.")
+        print(type(conn))
         return conn
     except mysql.connector.Error as err:
         logging.error("Error connecting to the database: %s", err)
@@ -21,6 +23,7 @@ def connect_to_database():
 if __name__ == "__main__":
     # Test the database connection
     connection = connect_to_database()
+    cursor = connection.cursor()
     if connection:
         print("Successfully connected to the database.")
         connection.close()

@@ -1,0 +1,13 @@
+columns:
+  - name: ProductKey
+    type: INT
+  - name: ProductAlternateKey
+    type: VARCHAR(255)
+  - name: ProductCategoryKeyEnglishProductName
+    type: VARCHAR(255)
+  - name: Color
+    type: VARCHAR(255)
+  - name: StandardCost
+    type: FLOAT
+  - name: ListPrice
+    type: FLOAT
