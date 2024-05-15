@@ -1,0 +1,12 @@
+Metadata-Version: 2.1
+Name: ETL-Pipeline-with-Spark
+Version: 0.1
+Author: Phi Nguyen
+Author-email: nguyenhongphi2807@gmail.com
+Requires-Dist: pyspark
+Requires-Dist: pandas
+Requires-Dist: numpy
+Requires-Dist: ipykernel
+Requires-Dist: Faker
+Requires-Dist: mysql-connector-python
+Requires-Dist: python-dotenv
