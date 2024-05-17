@@ -1,0 +1,31 @@
+ProductCategory:
+  ProductCategoryKey: "integer PRIMARY KEY AUTO_INCREMENT UNIQUE"
+  EnglishProductCategoryName: "VARCHAR(255) UNIQUE"
+
+Product:
+  ProductKey: "integer PRIMARY KEY AUTO_INCREMENT UNIQUE"
+  ProductAlternateKey: "VARCHAR(255)"
+  ProductCategoryKey: "integer FOREIGN KEY REFERENCES ProductCategory(ProductCategoryKey)"
+  EnglishProductName: "VARCHAR(255)"
+  Color: "VARCHAR(255)"
+  StandardCost: "float"
+  ListPrice: "float"
+
+Customer:
+  CustomerID: "integer PRIMARY KEY AUTO_INCREMENT UNIQUE"
+  Name: "VARCHAR(255)"
+  Email: "VARCHAR(255)"
+  Age: "integer"
+  ModifiedDate: "datetime"
+
+SalesOrderHeader:
+  SalesOrderID: "integer PRIMARY KEY AUTO_INCREMENT UNIQUE"
+  OrderDate: "datetime"
+  CustomerID: "integer FOREIGN KEY REFERENCES Customer(CustomerID)"
+
+SalesOrderDetail:
+  SalesOrderID: "integer FOREIGN KEY REFERENCES SalesOrderHeader(SalesOrderID)"
+  SalesOrderLineNumber: "integer"
+  ProductKey: "integer FOREIGN KEY REFERENCES Product(ProductKey)"
+  Qty: "integer"
+  ModifiedDate: "datetime"

@@ -10,13 +10,13 @@ class DataGenerator:
     
     def load_csv_to_db(self, csv_table_file_path: str, csv_table_schema_file_path: str, table_name: str):
         table_schema = load_table_schema_from_yaml(csv_table_schema_file_path)
-        table_creation_query = generate_create_table_sql(table_name=table_name, schema=table_schema)
+        # table_creation_query = generate_create_table_sql(table_name=table_name, schema=table_schema)
         
         # Connect to MySQL Database
         self.conn.connect()
         
         try:
-            self.conn.execute_query(table_creation_query)
+            # self.conn.execute_query(table_creation_query)
             
             # Load CSV
             data = pd.read_csv(csv_table_file_path, na_values=['NA', 'NULL'])
@@ -37,6 +37,9 @@ class DataGenerator:
             
         finally:
             self.conn.close()
+    
+    # def generate_sales_data(self):
+        
 
 if __name__ == "__main__":
     conn = DBConnection()
