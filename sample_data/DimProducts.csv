@@ -1,4 +1,4 @@
-﻿ProductKey,ProductAlternateKey,ProductCategoryKeyEnglishProductName,Color,StandardCost,ListPrice
+﻿ProductKey,ProductAlternateKey,ProductCategoryKey,EnglishProductName,Color,StandardCost,ListPrice
 1,AR-5381,NULL,Adjustable Race,NA,NULL,NULL
 2,BA-8327,NULL,Bearing Ball,NA,NULL,NULL
 3,BE-2349,NULL,BB Ball Bearing,NA,NULL,NULL
