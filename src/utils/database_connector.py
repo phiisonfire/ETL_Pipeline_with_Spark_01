@@ -3,6 +3,8 @@ from mysql.connector.connection_cext import CMySQLConnection
 from dotenv import load_dotenv
 import os
 from src.logger import logging
+from src.exception import CustomException
+import sys
 
 def connect_to_database() -> CMySQLConnection:
     try:
@@ -11,8 +13,11 @@ def connect_to_database() -> CMySQLConnection:
             user=os.getenv('MYSQL_USER'),
             password=os.getenv('MYSQL_PASSWORD'),
             host=os.getenv('MYSQL_HOST'),
-            database=os.getenv('MYSQL_DATABASE')
+            database=os.getenv('MYSQL_DATABASE'),
+            local_infile=True
         )
+        if conn is None:
+            raise CustomException("Failed to connect to the database", sys)
         logging.info("Successfully connected to the database.")
         print(type(conn))
         return conn
