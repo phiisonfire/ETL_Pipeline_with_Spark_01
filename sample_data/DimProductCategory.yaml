@@ -1,0 +1,5 @@
+columns:
+  - name: ProductCategoryKey
+    type: INT
+  - name: EnglishProductCategoryName
+    type: VARCHAR(255)

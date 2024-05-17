@@ -3,7 +3,9 @@ columns:
     type: INT
   - name: ProductAlternateKey
     type: VARCHAR(255)
-  - name: ProductCategoryKeyEnglishProductName
+  - name: ProductCategoryKey
+    type: INT
+  - name: EnglishProductName
     type: VARCHAR(255)
   - name: Color
     type: VARCHAR(255)

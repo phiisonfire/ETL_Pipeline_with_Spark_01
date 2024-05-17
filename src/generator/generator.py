@@ -25,12 +25,15 @@ class DataGenerator:
             data = data[columns]  # Ensure the CSV data matches the schema
             
             # Iterate through each row in the DataFrame
+            record_count = 0
             for index, row in data.iterrows():
+                record_count += 1
                 # Construct the SQL query
                 values = ', '.join(['NULL' if v is None else "\""+str(v).replace("'", "''")+"\"" for v in row])
                 columns_str = ', '.join(columns)
                 sql_query = f"INSERT INTO {table_name} ({columns_str}) VALUES ({values})"
                 self.conn.execute_query(sql_query)
+            logging.info(f"Write {record_count} rows into table {table_name} in database {self.conn.database}")
             
         finally:
             self.conn.close()
