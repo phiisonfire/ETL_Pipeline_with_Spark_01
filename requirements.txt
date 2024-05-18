@@ -6,4 +6,5 @@ Faker
 mysql-connector-python
 python-dotenv
 PyYAML
+tqdm
 -e .

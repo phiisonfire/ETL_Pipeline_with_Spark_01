@@ -6,6 +6,7 @@ from src.generator.schema import load_table_schema_from_yaml, generate_create_ta
 import pandas as pd
 import numpy as np
 import random
+from tqdm import tqdm
 
 from datetime import datetime
 
@@ -55,8 +56,8 @@ class DataGenerator:
             max_customer_id = self.conn.execute_query("SELECT MAX(CustomerID) FROM Customer")[0][0]
             max_sales_order_id = self.conn.execute_query("SELECT MAX(SalesOrderID) FROM SalesOrderHeader")[0][0]
             
-            print("Start generating sales data.")
-            for i in range(n):
+            print(f"Start generating {n} sales orders for {order_date}")
+            for i in tqdm(range(n)):
                 # 40% chance that the order is created by a new customer
                 is_new_customer = random.randint(1,10) > 6
                 
@@ -85,6 +86,7 @@ class DataGenerator:
                 for line in (sales_order_line_insert_queries):
                     self.conn.execute_query(line)
             print("Finish generating sales data.")
+            logging.info(f"Generated {n} sales orders for {order_date}")
         except Exception as e:
             print(f"Error generating sales data: {e}")
             logging.exception(f"Exception generating sales data {e}")
