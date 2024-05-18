@@ -51,13 +51,19 @@ class DBConnection:
             print("MySQL connection is closed")
             logging.info("MySQL connection is closed")
     
-    def execute_query(self, query, params=None):
-        cursor = self.connection.cursor()
+    def execute_query(self, query, on_schema=None, params=None):
+        cursor = self.connection.cursor(buffered=True)
         try:
+            if on_schema:
+                cursor.execute(f"USE {on_schema}")
+                print(f"USE {on_schema}")
             cursor.execute(query, params)
             self.connection.commit()
+            return cursor.fetchall() if query.strip().lower().startswith("select") else None
         except Error as e:
             print(f"Error executing query: {e}")
+            self.connection.rollback()
+            raise Exception(f"Error executing query: {e}")
         finally:
             cursor.close()
     
