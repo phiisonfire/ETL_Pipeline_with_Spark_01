@@ -44,7 +44,7 @@ class DataGenerator:
         finally:
             self.conn.close()
     
-    def generate_sales_data(self, n: int, order_date: str):
+    def generate_sales_data(self, n: int, order_date: str, batch_size=1000):
         # convert order_date from str to datetime
         order_date = datetime.strptime(order_date, "%Y-%m-%d")
         
@@ -57,6 +57,11 @@ class DataGenerator:
             max_sales_order_id = self.conn.execute_query("SELECT MAX(SalesOrderID) FROM SalesOrderHeader")[0][0]
             
             print(f"Start generating {n} sales orders for {order_date}")
+            
+            customer_inserts = []
+            sales_order_inserts = []
+            sales_order_line_inserts = []
+            
             for i in tqdm(range(n)):
                 # 40% chance that the order is created by a new customer
                 is_new_customer = random.randint(1,10) > 6
@@ -68,7 +73,8 @@ class DataGenerator:
                     # insert information of the new customer into table Customer
                     customer_insert_query = generate_customer_info(customer_id=curr_customer_id, 
                                                                 modified_date=order_date)
-                    self.conn.execute_query(customer_insert_query)
+                    customer_inserts.append(customer_insert_query)
+                    # self.conn.execute_query(customer_insert_query)
                 else:
                     # pick random a customer from current customers
                     curr_customer_id = random.randint(1, max_customer_id)
@@ -78,13 +84,32 @@ class DataGenerator:
                 sales_order_header_insert_query = generate_sales_order_header(sales_order_id=max_sales_order_id, 
                                                                             modified_date=order_date, 
                                                                             customer_id=curr_customer_id)
-                self.conn.execute_query(sales_order_header_insert_query)
+                sales_order_inserts.append(sales_order_header_insert_query)
+                # self.conn.execute_query(sales_order_header_insert_query)
                 
                 # create sales order lines for this sales order
                 sales_order_line_insert_queries = generate_sales_order_lines(sales_order_id=max_sales_order_id,
                                                                         modified_date=order_date)
-                for line in (sales_order_line_insert_queries):
-                    self.conn.execute_query(line)
+                sales_order_line_inserts.extend(sales_order_line_insert_queries)
+                # for line in (sales_order_line_insert_queries):
+                #     self.conn.execute_query(line)
+                
+                if len(sales_order_line_inserts) >= batch_size:
+                    self._execute_batch(customer_inserts)
+                    customer_inserts = []
+                    self._execute_batch(sales_order_inserts)
+                    sales_order_inserts = []
+                    self._execute_batch(sales_order_line_inserts)
+                    sales_order_line_inserts = []
+            
+            if sales_order_line_inserts:
+                self._execute_batch(customer_inserts)
+                customer_inserts = []
+                self._execute_batch(sales_order_inserts)
+                sales_order_inserts = []
+                self._execute_batch(sales_order_line_inserts)
+                sales_order_line_inserts = []
+                
             print("Finish generating sales data.")
             logging.info(f"Generated {n} sales orders for {order_date}")
         except Exception as e:
@@ -94,6 +119,18 @@ class DataGenerator:
             
         finally:
             self.conn.close()
+    
+    def _execute_batch(self, queries):
+        cursor = self.conn.connection.cursor()
+        try:
+            for query in queries:
+                cursor.execute(query)
+            self.conn.connection.commit()
+        except Exception as e:
+            print(f"Error executing batch query: {e}")
+            raise
+        finally:
+            cursor.close()
         
 
 if __name__ == "__main__":
