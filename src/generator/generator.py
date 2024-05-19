@@ -54,96 +54,6 @@ class DataGenerator:
             schema = yaml.safe_load(file)
             return list(schema[table_name].keys())      
     
-    def generate_sales_data_multithreading(self, n: int, order_date: str, batch_size=10000):
-        # Convert order_date from str to datetime
-        order_date = datetime.strptime(order_date, "%Y-%m-%d")
-        
-        # Connect to MySQL Database
-        self.conn.connect()
-        
-        try:
-            # Get the latest CustomerID and SalesOrderID
-            max_customer_id = self.conn.execute_query("SELECT MAX(CustomerID) FROM Customer")[0][0]
-            curr_customer_id = max_customer_id
-            max_sales_order_id = self.conn.execute_query("SELECT MAX(SalesOrderID) FROM SalesOrderHeader")[0][0]
-            
-            
-            # Shared data structures
-            max_customer_id_lock = threading.Lock()
-            max_sales_order_id_lock = threading.Lock()
-            
-            print(f"Start generating {n} sales orders for {order_date}")
-            
-            # Number of threads
-            num_threads = 10
-            chunk_size = n // num_threads
-            
-            def generate_chunk(chunk_size, order_date, batch_size):
-                thread_name = threading.current_thread().name
-                print(f"Launch job on thread {thread_name}")
-                nonlocal max_customer_id, curr_customer_id, max_sales_order_id
-                local_customer_values = []
-                local_sales_order_values = []
-                local_sales_order_line_values = []
-                
-                for i in range(chunk_size):
-                    is_new_customer = random.randint(1, 10) > 6  # 40% chance that the order is created by a new customer
-                    
-                    if is_new_customer:
-                        # Get an id for the new customer
-                        max_customer_id += 1
-                        curr_customer_id = max_customer_id
-                        
-                        # Generate value tuple for the new customer
-                        local_customer_values.append(generate_customer_info(customer_id=curr_customer_id, modified_date=order_date))
-                        
-                    else:
-                        # Pick a random customer from current customers
-                        curr_customer_id = random.randint(1, max_customer_id)
-                    
-                    # Create 1 sales order for this current customer
-                    max_sales_order_id += 1
-                    # Generate value tuple for the new order header
-                    local_sales_order_values.append(generate_sales_order_header(
-                        sales_order_id=max_sales_order_id, 
-                        modified_date=order_date, 
-                        customer_id=curr_customer_id))
-                    print(f"Thread {thread_name} generated SalesOrderHeader for SalesOrderId = {max_sales_order_id}")
-                    # Create sales order lines for this sales order
-                    local_sales_order_line_values.extend(generate_sales_order_lines(
-                        sales_order_id=max_sales_order_id, 
-                        modified_date=order_date))
-                    
-                    if len(local_sales_order_line_values) >= batch_size:
-                        print(f"Thread {thread_name} called SQL INSERTION")
-                        self._execute_batch('Customer', local_customer_values)
-                        local_customer_values = []
-                        self._execute_batch('SalesOrderHeader', local_sales_order_values)
-                        local_sales_order_values = []
-                        self._execute_batch('SalesOrderDetail', local_sales_order_line_values)
-                        local_sales_order_line_values = []
-                
-                if local_sales_order_line_values:
-                    print(f"Thread {thread_name} called SQL INSERTION")
-                    self._execute_batch('Customer', local_customer_values)
-                    self._execute_batch('SalesOrderHeader', local_sales_order_values)
-                    self._execute_batch('SalesOrderDetail', local_sales_order_line_values)
-            
-            # Using ThreadPoolExecutor to parallelize the generation
-            pool = concurrent.futures.ThreadPoolExecutor(max_workers=num_threads)
-            for _ in range(num_threads):
-                pool.submit(generate_chunk, chunk_size, order_date, batch_size)
-            pool.shutdown(wait=True)
-            
-            print("Finish generating sales data.")
-            logging.info(f"Generated {n} sales orders for {order_date}")
-        except Exception as e:
-            print(f"Error generating sales data: {e}")
-            logging.exception(f"Exception generating sales data {e}")
-            raise Exception(f"Error executing query: {e}")
-        finally:
-            self.conn.close()
-        
     def generate_sales_data(self, n: int, order_date: str, batch_size=100000):
         # convert order_date from str to datetime
         order_date = datetime.strptime(order_date, "%Y-%m-%d")
@@ -213,7 +123,6 @@ class DataGenerator:
             
         finally:
             self.conn.close()
-    
     
     def _execute_batch(self, table_name, values):
         cursor = self.conn.connection.cursor()
