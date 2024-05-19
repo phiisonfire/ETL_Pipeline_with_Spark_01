@@ -7,6 +7,8 @@ import pandas as pd
 import numpy as np
 import random
 from tqdm import tqdm
+from faker import Faker
+import yaml
 
 from datetime import datetime
 
@@ -44,7 +46,13 @@ class DataGenerator:
         finally:
             self.conn.close()
     
-    def generate_sales_data(self, n: int, order_date: str, batch_size=1000):
+    def get_table_columns(self, table_name: str):
+        yaml_file = '/home/phinguyen/ETL_Pipeline_with_Spark_01/sample_data/retail_db_schema.yaml'
+        with open(yaml_file, 'r') as file:
+            schema = yaml.safe_load(file)
+            return list(schema[table_name].keys())      
+            
+    def generate_sales_data(self, n: int, order_date: str, batch_size=100000):
         # convert order_date from str to datetime
         order_date = datetime.strptime(order_date, "%Y-%m-%d")
         
@@ -58,57 +66,51 @@ class DataGenerator:
             
             print(f"Start generating {n} sales orders for {order_date}")
             
-            customer_inserts = []
-            sales_order_inserts = []
-            sales_order_line_inserts = []
+            customer_values = []
+            sales_order_values = []
+            sales_order_line_values = []
             
             for i in tqdm(range(n)):
-                # 40% chance that the order is created by a new customer
-                is_new_customer = random.randint(1,10) > 6
+                is_new_customer = random.randint(1,10) > 6 # 40% chance that the order is created by a new customer
                 
                 if is_new_customer:
                     # get an id for the new customer
                     max_customer_id += 1
                     curr_customer_id = max_customer_id
-                    # insert information of the new customer into table Customer
-                    customer_insert_query = generate_customer_info(customer_id=curr_customer_id, 
-                                                                modified_date=order_date)
-                    customer_inserts.append(customer_insert_query)
-                    # self.conn.execute_query(customer_insert_query)
+                    
+                    # generate value tuple for the new customer
+                    customer_values.append(generate_customer_info(customer_id=curr_customer_id, modified_date=order_date))
+                    
                 else:
                     # pick random a customer from current customers
                     curr_customer_id = random.randint(1, max_customer_id)
                 
                 # create 1 sales order for this current customer
                 max_sales_order_id += 1
-                sales_order_header_insert_query = generate_sales_order_header(sales_order_id=max_sales_order_id, 
-                                                                            modified_date=order_date, 
-                                                                            customer_id=curr_customer_id)
-                sales_order_inserts.append(sales_order_header_insert_query)
-                # self.conn.execute_query(sales_order_header_insert_query)
+                # # generate value tuple for the new order header
+                sales_order_values.append(generate_sales_order_header(
+                    sales_order_id=max_sales_order_id, 
+                    modified_date=order_date, 
+                    customer_id=curr_customer_id))
+                
                 
                 # create sales order lines for this sales order
-                sales_order_line_insert_queries = generate_sales_order_lines(sales_order_id=max_sales_order_id,
-                                                                        modified_date=order_date)
-                sales_order_line_inserts.extend(sales_order_line_insert_queries)
-                # for line in (sales_order_line_insert_queries):
-                #     self.conn.execute_query(line)
+                sales_order_line_values.extend(generate_sales_order_lines(
+                    sales_order_id=max_sales_order_id, 
+                    modified_date=order_date))
                 
-                if len(sales_order_line_inserts) >= batch_size:
-                    self._execute_batch(customer_inserts)
-                    customer_inserts = []
-                    self._execute_batch(sales_order_inserts)
-                    sales_order_inserts = []
-                    self._execute_batch(sales_order_line_inserts)
-                    sales_order_line_inserts = []
+                if len(sales_order_line_values) >= batch_size:
+                    self._execute_batch('Customer', customer_values)
+                    customer_values = []
+                    self._execute_batch('SalesOrderHeader', sales_order_values)
+                    sales_order_values = []
+                    self._execute_batch('SalesOrderDetail', sales_order_line_values)
+                    sales_order_line_values = []
             
-            if sales_order_line_inserts:
-                self._execute_batch(customer_inserts)
-                customer_inserts = []
-                self._execute_batch(sales_order_inserts)
-                sales_order_inserts = []
-                self._execute_batch(sales_order_line_inserts)
-                sales_order_line_inserts = []
+            if sales_order_line_values:
+                self._execute_batch('Customer', customer_values)
+                self._execute_batch('SalesOrderHeader', sales_order_values)
+                self._execute_batch('SalesOrderDetail', sales_order_line_values)
                 
             print("Finish generating sales data.")
             logging.info(f"Generated {n} sales orders for {order_date}")
@@ -120,15 +122,24 @@ class DataGenerator:
         finally:
             self.conn.close()
     
-    def _execute_batch(self, queries):
+    
+    def _execute_batch(self, table_name, values):
         cursor = self.conn.connection.cursor()
+        table_columns = self.get_table_columns(table_name)
         try:
-            for query in queries:
+            MAX_ROWS_PER_INSERT = 1000
+            for i in range(0, len(values), MAX_ROWS_PER_INSERT):
+                batch_values = values[i:i + MAX_ROWS_PER_INSERT]
+                query = f"INSERT INTO {table_name} ({', '.join(table_columns)}) VALUES "
+                values_str = ", ".join(batch_values)
+                query += values_str
                 cursor.execute(query)
+            
             self.conn.connection.commit()
+            
         except Exception as e:
             print(f"Error executing batch query: {e}")
-            raise
+            raise Exception(e)
         finally:
             cursor.close()
         
