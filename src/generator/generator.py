@@ -7,10 +7,9 @@ import pandas as pd
 import numpy as np
 import random
 from tqdm import tqdm
-from faker import Faker
 import yaml
-import concurrent.futures
-import threading
+import os
+from multiprocessing import Process, Value, Lock
 
 from datetime import datetime
 
@@ -53,6 +52,130 @@ class DataGenerator:
         with open(yaml_file, 'r') as file:
             schema = yaml.safe_load(file)
             return list(schema[table_name].keys())      
+    
+    def generate_sales_data_multiprocessing(
+        self, 
+        n: int, 
+        order_date: str, 
+        batch_size=100000,
+        n_processes= 8
+    ):
+        # convert order_date from str to datetime
+        order_date = datetime.strptime(order_date, "%Y-%m-%d")
+        
+        # Connect to MySQL Database
+        self.conn.connect()
+        
+        try:
+            # get the latest CustomerID and SalesOrderID
+            max_customer_id = self.conn.execute_query("SELECT MAX(CustomerID) FROM Customer")[0][0]
+            curr_customer_id = max_customer_id
+            max_sales_order_id = self.conn.execute_query("SELECT MAX(SalesOrderID) FROM SalesOrderHeader")[0][0]
+            
+            records_per_process = n // n_processes
+            
+            # Create shared variables and lock
+            max_customer_id_shared = Value('i', max_customer_id)
+            curr_customer_id_shared = Value('i', curr_customer_id)
+            max_sales_order_id_shared = Value('i', max_sales_order_id)
+            lock = Lock()
+            
+            print(f"Start generating {n} sales orders for {order_date}")
+            
+            # create processes
+            processes = []
+            for _ in range(n_processes):
+                p = Process(target=self.processor_generate, 
+                            args=(records_per_process, max_customer_id_shared, curr_customer_id_shared,
+                                  max_sales_order_id_shared, lock, order_date, batch_size))
+                p.start()
+                processes.append(p)
+            for p in processes:
+                p.join()
+            
+            print("Finish generating sales data.")
+            logging.info(f"Generated {n} sales orders for {order_date}")
+        except Exception as e:
+            print(f"Error generating sales data: {e}")
+            logging.exception(f"Exception generating sales data {e}")
+            raise Exception(f"Error executing query: {e}")
+            
+        finally:
+            self.conn.close()
+    
+    def processor_generate(
+        self,
+        records_per_process,
+        max_customer_id_shared,
+        curr_customer_id_shared,
+        max_sales_order_id_shared,
+        lock,
+        order_date,
+        batch_size
+    ):
+        try:
+            # Establish a new database connection for each process
+            process_conn = self.conn
+            process_conn.connect()
+            print(f"Process {os.getpid()} starts generate data")
+        
+            customer_values = []
+            sales_order_values = []
+            sales_order_line_values = []
+            
+            for _ in tqdm(range(records_per_process)):
+                is_new_customer = random.randint(1,10) > 9 # 10% chance that the order is created by a new customer
+                
+                if is_new_customer:
+                    # get an id for the new customer
+                    lock.acquire()
+                    max_customer_id_shared.value = max_customer_id_shared.value + 1
+                    curr_customer_id_shared.value = max_customer_id_shared.value
+                    max_customer_id = max_customer_id_shared.value
+                    curr_customer_id = curr_customer_id_shared.value
+                    customer_info = generate_customer_info(curr_customer_id, order_date)
+                    self._execute_batch('Customer', [customer_info], conn=process_conn)
+                    lock.release()
+                    
+                    # generate value tuple for the new customer
+                    customer_values.append(generate_customer_info(customer_id=curr_customer_id, modified_date=order_date))
+                    
+                else:
+                    # pick random a customer from current customers
+                    lock.acquire()
+                    curr_customer_id_shared.value = random.randint(1, max_customer_id_shared.value)
+                    curr_customer_id = curr_customer_id_shared.value
+                    lock.release()
+                # create 1 sales order for this current customer
+                lock.acquire()
+                max_sales_order_id_shared.value = max_sales_order_id_shared.value + 1
+                max_sales_order_id = max_sales_order_id_shared.value
+                lock.release()
+                # # generate value tuple for the new order header
+                sales_order_values.append(generate_sales_order_header(
+                    sales_order_id=max_sales_order_id, 
+                    modified_date=order_date, 
+                    customer_id=curr_customer_id))
+                
+                
+                # create sales order lines for this sales order
+                sales_order_line_values.extend(generate_sales_order_lines(
+                    sales_order_id=max_sales_order_id, 
+                    modified_date=order_date))
+                
+                if len(sales_order_line_values) >= batch_size:
+                    self._execute_batch('SalesOrderHeader', sales_order_values, conn=process_conn)
+                    sales_order_values = []
+                    self._execute_batch('SalesOrderDetail', sales_order_line_values, conn=process_conn)
+                    sales_order_line_values = []
+            
+            if sales_order_line_values:
+                self._execute_batch('SalesOrderHeader', sales_order_values, conn=process_conn)
+                self._execute_batch('SalesOrderDetail', sales_order_line_values, conn=process_conn)
+        except Exception as e:
+            raise Exception(e)
+        finally:
+            process_conn.close()
     
     def generate_sales_data(self, n: int, order_date: str, batch_size=100000):
         # convert order_date from str to datetime
@@ -124,8 +247,11 @@ class DataGenerator:
         finally:
             self.conn.close()
     
-    def _execute_batch(self, table_name, values):
-        cursor = self.conn.connection.cursor()
+    def _execute_batch(self, table_name, values, conn=None):
+        if conn:
+            cursor = conn.connection.cursor()
+        else:
+            cursor = self.conn.connection.cursor()
         table_columns = self.get_table_columns(table_name)
         try:
             MAX_ROWS_PER_INSERT = 1000
