@@ -3,10 +3,10 @@ from src.utils.db_connection import DBConnection
 from src.generator.generator import DataGenerator
 import time
 
-def main(n: int, order_date: str, batch_size=10000):
+def main(n: int, order_date: str, n_processes: int = 8):
     conn = DBConnection()
     generator = DataGenerator(conn)
-    generator.generate_and_load(n_orders=10000, order_date="2022-11-07", n_processes=8)
+    generator.generate_and_load(n_orders=n, order_date=order_date, n_processes=8)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Generate sales data.')
