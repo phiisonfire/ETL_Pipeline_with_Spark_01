@@ -1,6 +1,7 @@
 import os
 from dotenv import load_dotenv
 from pyspark.sql import SparkSession
+from pyspark.sql.functions import lit
 
 load_dotenv()
 
@@ -24,4 +25,7 @@ df = spark.read.format("jdbc") \
     .option("password", mysql_password) \
     .load()
 
-df.show()
+table_location = "hdfs://localhost:9900/datalake/Customer"
+
+output_df = df.withColumn("year", lit(2024)).withColumn("month", lit(5)).withColumn("day", lit(21))
+output_df.write.partitionBy("year", "month", "day").mode("append").parquet(table_location)
