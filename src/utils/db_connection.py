@@ -20,7 +20,8 @@ class DBConnection:
                 user=self.user,
                 password=self.password,
                 host=self.host,
-                database=self.database
+                database=self.database,
+                allow_local_infile=True  # Enable local infile
             )
             if self.connection.is_connected():
                 print("Connection to MySQL database is successful")

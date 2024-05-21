@@ -1,17 +1,13 @@
 from src.logger import logging
-from mysql.connector import Error
 from src.utils.db_connection import DBConnection
-from src.utils.db_query_generators import generate_customer_info, generate_sales_order_header, generate_sales_order_lines
-from src.generator.schema import load_table_schema_from_yaml, generate_create_table_sql
+from src.generator.schema import load_table_schema_from_yaml
 import pandas as pd
 import numpy as np
-import random
-from tqdm import tqdm
-import yaml
-import os
-from multiprocessing import Process, Value, Lock
-
-from datetime import datetime
+from random import randint
+from multiprocessing import Process, Value, Lock, Manager
+from faker import Faker
+from typing import List, Dict
+import csv
 
 class DataGenerator:
     def __init__(self, conn: DBConnection) -> None:
@@ -19,21 +15,14 @@ class DataGenerator:
     
     def load_csv_to_db(self, csv_table_file_path: str, csv_table_schema_file_path: str, table_name: str):
         table_schema = load_table_schema_from_yaml(csv_table_schema_file_path)
-        # table_creation_query = generate_create_table_sql(table_name=table_name, schema=table_schema)
         
-        # Connect to MySQL Database
         self.conn.connect()
-        
         try:
-            # self.conn.execute_query(table_creation_query)
-            
-            # Load CSV
             data = pd.read_csv(csv_table_file_path, na_values=['NA', 'NULL'])
             data.replace({np.nan: None}, inplace=True)
             columns = [column['name'] for column in table_schema['columns']]
             data = data[columns]  # Ensure the CSV data matches the schema
             
-            # Iterate through each row in the DataFrame
             record_count = 0
             for index, row in data.iterrows():
                 record_count += 1
@@ -42,235 +31,159 @@ class DataGenerator:
                 columns_str = ', '.join(columns)
                 sql_query = f"INSERT INTO {table_name} ({columns_str}) VALUES ({values})"
                 self.conn.execute_query(sql_query)
-            logging.info(f"Write {record_count} rows into table {table_name} in database {self.conn.database}")
-            
+            logging.info(f"Write {record_count} rows into table {table_name} in database {self.conn.database}")  
         finally:
-            self.conn.close()
+            self.conn.close()  
     
-    def get_table_columns(self, table_name: str):
-        yaml_file = '/home/phinguyen/ETL_Pipeline_with_Spark_01/sample_data/retail_db_schema.yaml'
-        with open(yaml_file, 'r') as file:
-            schema = yaml.safe_load(file)
-            return list(schema[table_name].keys())      
-    
-    def generate_sales_data_multiprocessing(
-        self, 
-        n: int, 
-        order_date: str, 
-        batch_size=100000,
-        n_processes= 8
-    ):
-        # convert order_date from str to datetime
-        order_date = datetime.strptime(order_date, "%Y-%m-%d")
-        
-        # Connect to MySQL Database
-        self.conn.connect()
-        
-        try:
-            # get the latest CustomerID and SalesOrderID
-            max_customer_id = self.conn.execute_query("SELECT MAX(CustomerID) FROM Customer")[0][0]
-            curr_customer_id = max_customer_id
-            max_sales_order_id = self.conn.execute_query("SELECT MAX(SalesOrderID) FROM SalesOrderHeader")[0][0]
-            
-            records_per_process = n // n_processes
-            
-            # Create shared variables and lock
-            max_customer_id_shared = Value('i', max_customer_id)
-            curr_customer_id_shared = Value('i', curr_customer_id)
-            max_sales_order_id_shared = Value('i', max_sales_order_id)
-            lock = Lock()
-            
-            print(f"Start generating {n} sales orders for {order_date}")
-            
-            # create processes
-            processes = []
-            for _ in range(n_processes):
-                p = Process(target=self.processor_generate, 
-                            args=(records_per_process, max_customer_id_shared, curr_customer_id_shared,
-                                  max_sales_order_id_shared, lock, order_date, batch_size))
-                p.start()
-                processes.append(p)
-            for p in processes:
-                p.join()
-            
-            print("Finish generating sales data.")
-            logging.info(f"Generated {n} sales orders for {order_date}")
-        except Exception as e:
-            print(f"Error generating sales data: {e}")
-            logging.exception(f"Exception generating sales data {e}")
-            raise Exception(f"Error executing query: {e}")
-            
-        finally:
-            self.conn.close()
-    
-    def processor_generate(
+    def generate_sales_data_process(
         self,
-        records_per_process,
+        n_orders_per_process: int,
+        order_date: str,
         max_customer_id_shared,
-        curr_customer_id_shared,
-        max_sales_order_id_shared,
+        start_sales_order_id: int,
         lock,
-        order_date,
-        batch_size
-    ):
-        try:
-            # Establish a new database connection for each process
-            process_conn = self.conn
-            process_conn.connect()
-            print(f"Process {os.getpid()} starts generate data")
-        
-            customer_values = []
-            sales_order_values = []
-            sales_order_line_values = []
-            
-            for _ in tqdm(range(records_per_process)):
-                is_new_customer = random.randint(1,10) > 9 # 10% chance that the order is created by a new customer
-                
-                if is_new_customer:
-                    # get an id for the new customer
-                    lock.acquire()
-                    max_customer_id_shared.value = max_customer_id_shared.value + 1
-                    curr_customer_id_shared.value = max_customer_id_shared.value
-                    max_customer_id = max_customer_id_shared.value
-                    curr_customer_id = curr_customer_id_shared.value
-                    customer_info = generate_customer_info(curr_customer_id, order_date)
-                    self._execute_batch('Customer', [customer_info], conn=process_conn)
-                    lock.release()
-                    
-                    # generate value tuple for the new customer
-                    customer_values.append(generate_customer_info(customer_id=curr_customer_id, modified_date=order_date))
-                    
-                else:
-                    # pick random a customer from current customers
-                    lock.acquire()
-                    curr_customer_id_shared.value = random.randint(1, max_customer_id_shared.value)
-                    curr_customer_id = curr_customer_id_shared.value
-                    lock.release()
-                # create 1 sales order for this current customer
+        process_id: int,
+        result_queue
+    ) -> None:      
+        fake = Faker()
+        customer_data = []
+        sales_order_header_data = []
+        sales_order_detail_data = []
+
+        for i in range(n_orders_per_process):
+            if randint(1, 10) > 8:
                 lock.acquire()
-                max_sales_order_id_shared.value = max_sales_order_id_shared.value + 1
-                max_sales_order_id = max_sales_order_id_shared.value
+                max_customer_id_shared.value += 1
+                curr_customer_id = max_customer_id_shared.value
                 lock.release()
-                # # generate value tuple for the new order header
-                sales_order_values.append(generate_sales_order_header(
-                    sales_order_id=max_sales_order_id, 
-                    modified_date=order_date, 
-                    customer_id=curr_customer_id))
-                
-                
-                # create sales order lines for this sales order
-                sales_order_line_values.extend(generate_sales_order_lines(
-                    sales_order_id=max_sales_order_id, 
-                    modified_date=order_date))
-                
-                if len(sales_order_line_values) >= batch_size:
-                    self._execute_batch('SalesOrderHeader', sales_order_values, conn=process_conn)
-                    sales_order_values = []
-                    self._execute_batch('SalesOrderDetail', sales_order_line_values, conn=process_conn)
-                    sales_order_line_values = []
-            
-            if sales_order_line_values:
-                self._execute_batch('SalesOrderHeader', sales_order_values, conn=process_conn)
-                self._execute_batch('SalesOrderDetail', sales_order_line_values, conn=process_conn)
+                new_customer = (
+                    curr_customer_id,
+                    fake.name(),
+                    fake.email(),
+                    randint(18, 90),
+                    order_date
+                )
+                customer_data.append(new_customer)
+            else:
+                curr_customer_id = randint(1, max_customer_id_shared.value)
+
+            new_sales_order_header = (
+                start_sales_order_id + i,
+                order_date,
+                curr_customer_id
+            )
+            sales_order_header_data.append(new_sales_order_header)
+
+            n_lines = randint(1, 10)
+            for line_number in range(n_lines):
+                new_sales_order_detail = (
+                    start_sales_order_id + i,
+                    line_number + 1,
+                    randint(1, 606),
+                    randint(1, 20),
+                    order_date
+                )
+                sales_order_detail_data.append(new_sales_order_detail)
+
+        result_queue.put((process_id, customer_data, sales_order_header_data, sales_order_detail_data))
+        
+    def save_to_csv(self, order_date: str, result_queue, n_processes: int) -> List[str]:
+        print("Start writing data to .csv files")
+        customers_data = []
+        all_sales_order_header_data = []
+        all_sales_order_detail_data = []
+
+        for _ in range(n_processes):
+            process_id, customer_data, sales_order_header_data, sales_order_detail_data = result_queue.get()
+            customers_data.extend(customer_data)
+            all_sales_order_header_data.extend(sales_order_header_data)
+            all_sales_order_detail_data.extend(sales_order_detail_data)
+
+        customers_df = pd.DataFrame(customers_data, columns=["CustomerID", "Name", "Email", "Age", "ModifiedDate"])
+        customers_df.sort_values(by='CustomerID', ascending=True, inplace=True)
+        sales_order_header_df = pd.DataFrame(all_sales_order_header_data, columns=["SalesOrderID", "OrderDate", "CustomerID"])
+        sales_order_header_df.sort_values(by='SalesOrderID', ascending=True, inplace=True)
+        sales_order_detail_df = pd.DataFrame(all_sales_order_detail_data, columns=["SalesOrderID", "SalesOrderLineNumber", "ProductKey", "Qty", "ModifiedDate"])
+        sales_order_detail_df.sort_values(by=['SalesOrderID', 'SalesOrderLineNumber'], ascending=[True, True], inplace=True)
+
+        customder_csv_file_path = "/tmp/Customer_" + order_date + ".csv"
+        salesorderheader_csv_file_path = "/tmp/SalesOrderHeader_" + order_date + ".csv"
+        salesorderdetail_csv_file_path = "/tmp/SalesOrderDetail_" + order_date + ".csv"
+        
+        customers_df.to_csv(customder_csv_file_path, index=False, sep=',', quotechar='"', lineterminator='\n', quoting=csv.QUOTE_ALL)
+        sales_order_header_df.to_csv(salesorderheader_csv_file_path, index=False, sep=',', quotechar='"', lineterminator='\n', quoting=csv.QUOTE_ALL)
+        sales_order_detail_df.to_csv(salesorderdetail_csv_file_path, index=False, sep=',', quotechar='"', lineterminator='\n', quoting=csv.QUOTE_ALL)
+        print("Finish writing data to .csv files")
+        return [customder_csv_file_path, salesorderheader_csv_file_path, salesorderdetail_csv_file_path]
+    
+    def generate_1_day_sales_data(
+        self,
+        n_orders: int, 
+        order_date: str,
+        n_processes: int
+    ) -> Dict:
+        
+        # Get current max_customer_id and max_sales_order_id from mysql database
+        try:
+            self.conn.connect()
+            max_customer_id = self.conn.execute_query("SELECT MAX(CustomerId) FROM Customer")[0][0]
+            max_sales_order_id = self.conn.execute_query("SELECT MAX(SalesOrderId) FROM SalesOrderHeader")[0][0]
         except Exception as e:
             raise Exception(e)
-        finally:
-            process_conn.close()
-    
-    def generate_sales_data(self, n: int, order_date: str, batch_size=100000):
-        # convert order_date from str to datetime
-        order_date = datetime.strptime(order_date, "%Y-%m-%d")
-        
-        # Connect to MySQL Database
-        self.conn.connect()
-        
-        try:
-            # get the latest CustomerID and SalesOrderID
-            max_customer_id = self.conn.execute_query("SELECT MAX(CustomerID) FROM Customer")[0][0]
-            max_sales_order_id = self.conn.execute_query("SELECT MAX(SalesOrderID) FROM SalesOrderHeader")[0][0]
-            
-            print(f"Start generating {n} sales orders for {order_date}")
-            
-            customer_values = []
-            sales_order_values = []
-            sales_order_line_values = []
-            
-            for i in tqdm(range(n)):
-                is_new_customer = random.randint(1,10) > 6 # 40% chance that the order is created by a new customer
-                
-                if is_new_customer:
-                    # get an id for the new customer
-                    max_customer_id += 1
-                    curr_customer_id = max_customer_id
-                    
-                    # generate value tuple for the new customer
-                    customer_values.append(generate_customer_info(customer_id=curr_customer_id, modified_date=order_date))
-                    
-                else:
-                    # pick random a customer from current customers
-                    curr_customer_id = random.randint(1, max_customer_id)
-                
-                # create 1 sales order for this current customer
-                max_sales_order_id += 1
-                # # generate value tuple for the new order header
-                sales_order_values.append(generate_sales_order_header(
-                    sales_order_id=max_sales_order_id, 
-                    modified_date=order_date, 
-                    customer_id=curr_customer_id))
-                
-                
-                # create sales order lines for this sales order
-                sales_order_line_values.extend(generate_sales_order_lines(
-                    sales_order_id=max_sales_order_id, 
-                    modified_date=order_date))
-                
-                if len(sales_order_line_values) >= batch_size:
-                    self._execute_batch('Customer', customer_values)
-                    customer_values = []
-                    self._execute_batch('SalesOrderHeader', sales_order_values)
-                    sales_order_values = []
-                    self._execute_batch('SalesOrderDetail', sales_order_line_values)
-                    sales_order_line_values = []
-            
-            if sales_order_line_values:
-                self._execute_batch('Customer', customer_values)
-                self._execute_batch('SalesOrderHeader', sales_order_values)
-                self._execute_batch('SalesOrderDetail', sales_order_line_values)
-                
-            print("Finish generating sales data.")
-            logging.info(f"Generated {n} sales orders for {order_date}")
-        except Exception as e:
-            print(f"Error generating sales data: {e}")
-            logging.exception(f"Exception generating sales data {e}")
-            raise Exception(f"Error executing query: {e}")
-            
         finally:
             self.conn.close()
+        
+        n_orders_per_process = n_orders // n_processes
+        remainder_orders = n_orders % n_processes
+        max_customer_id_shared = Value('i', max_customer_id)
+        manager = Manager()
+        result_queue = manager.Queue()
+        processes = []
+        lock = Lock()
+        
+        for i in range(n_processes):
+            additional_order = 1 if i < remainder_orders else 0
+            start_sales_order_id = max_sales_order_id + i * (n_orders_per_process + additional_order)
+            args = (n_orders_per_process + additional_order, order_date, max_customer_id_shared, start_sales_order_id, lock, i, result_queue)
+            p = Process(target=self.generate_sales_data_process, args=args)
+            p.start()
+            processes.append(p)
+        
+        for p in processes:
+            p.join()
+        
+        file_paths = self.save_to_csv(order_date=order_date, result_queue=result_queue, n_processes=n_processes)
+        table_names = ["Customer", "SalesOrderHeader", "SalesOrderDetail"]
+        return dict(zip(table_names, file_paths))
     
-    def _execute_batch(self, table_name, values, conn=None):
-        if conn:
-            cursor = conn.connection.cursor()
-        else:
-            cursor = self.conn.connection.cursor()
-        table_columns = self.get_table_columns(table_name)
+    def generate_and_load(
+        self,
+        n_orders: int, 
+        order_date: str,
+        n_processes: int
+    ) -> None:
+        print("Start generating data and save into csv files.")
+        table_names_and_paths = self.generate_1_day_sales_data(n_orders, order_date, n_processes)
+        print("Finish generating data and save into csv files.")
         try:
-            MAX_ROWS_PER_INSERT = 1000
-            for i in range(0, len(values), MAX_ROWS_PER_INSERT):
-                batch_values = values[i:i + MAX_ROWS_PER_INSERT]
-                query = f"INSERT INTO {table_name} ({', '.join(table_columns)}) VALUES "
-                values_str = ", ".join(batch_values)
-                query += values_str
-                cursor.execute(query)
-            
-            self.conn.connection.commit()
-            
+            self.conn.connect()
+            for table, csv_path in table_names_and_paths.items():
+                load_query = f"""
+                    LOAD DATA LOCAL INFILE '{csv_path}'
+                    INTO TABLE {table}
+                    FIELDS TERMINATED BY ','  -- specify the delimiter used in your CSV file
+                    ENCLOSED BY '"'           -- specify if the fields are enclosed by a specific character
+                    LINES TERMINATED BY '\n'  -- specify the line terminator
+                    IGNORE 1 LINES            -- skip the header row if your CSV has a header
+                    """
+                print(f"Start loading csv file from {csv_path} into table {table}")
+                self.conn.execute_query(load_query)
+                print(f"Finish loading csv file from {csv_path} into table {table}")
         except Exception as e:
-            print(f"Error executing batch query: {e}")
             raise Exception(e)
         finally:
-            cursor.close()
-        
-
+            self.conn.close()
+            
 if __name__ == "__main__":
     conn = DBConnection()
     generator = DataGenerator(conn)
