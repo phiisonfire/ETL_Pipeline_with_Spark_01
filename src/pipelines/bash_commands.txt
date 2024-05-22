@@ -1,0 +1,4 @@
+./spark-submit \
+--jars /home/phinguyen/lib/mysql-connector-j-8.0.33.jar \
+/home/phinguyen/ETL_Pipeline_with_Spark_01/src/pipelines/ingestion.py \
+--table_name SalesOrderDetail
