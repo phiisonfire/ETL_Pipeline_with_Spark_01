@@ -36,19 +36,12 @@ def get_hdfs_FileSystem_obj(spark: SparkSession, hdfs_uri: str):
 
 def main(table_name: str) -> None:
     # Define table-specific details
-    table_details = {
-        "Customer": {"primary_col": "CustomerID", "date_col": "ModifiedDate"},
-        "SalesOrderHeader": {"primary_col": "SalesOrderID", "date_col": "OrderDate"},
-        "SalesOrderDetail": {"primary_col": "SalesOrderID", "date_col": "ModifiedDate"}
-    }
+    table_names = ["Product", "ProductCategory"]
     
-    if table_name not in table_details:
+    if table_name not in table_names:
         print(f"{BOLD_YELLOW}Table name '{table_name}' is not recognized.{RESET}")
         logger.error(f"Table name '{table_name}' is not recognized.")
         return
-    
-    primary_col = table_details[table_name]["primary_col"]
-    date_col = table_details[table_name]["date_col"]
     
     # Load environment variables
     load_dotenv()
@@ -64,11 +57,8 @@ def main(table_name: str) -> None:
 
     # Create Spark session
     spark = SparkSession.builder \
-        .config("spark.driver.memory", "2g") \
-        .config("spark.driver.cores", "1") \
-        .config("spark.executor.memory", "4g") \
-        .config("spark.executor.cores", "4") \
-        .appName("Ingestion - from OLTP Database (MySQL) to DataLake (Hadoop HDFS)") \
+        .master("local") \
+        .appName("Ingestion fixed tables - from OLTP Database (MySQL) to DataLake (Hadoop HDFS)") \
         .getOrCreate()
     
     try:
@@ -78,11 +68,9 @@ def main(table_name: str) -> None:
         
         # Check for existing data in HDFS
         if fs.exists(hdfs_table_dir_path):
-            hdfs_df = spark.read.parquet(table_dir_str)
-            hdfs_df.createOrReplaceTempView("hdfs_table")
-            latest_record = spark.sql(f"SELECT MAX({primary_col}) FROM hdfs_table").collect()[0][0]
-        else:
-            latest_record = 0
+            print(f"{BOLD_YELLOW}Table {table_name} is already ingested into HDFS.{RESET}")
+            logger.error(f"Table {table_name} is already ingested into HDFS.")
+            return
         
         # Load new data from MySQL
         mysql_df = spark.read.format("jdbc") \
@@ -92,26 +80,10 @@ def main(table_name: str) -> None:
             .option("user", mysql_user) \
             .option("password", mysql_password) \
             .load()
-        
-        mysql_df.createOrReplaceTempView("mysql_table")
-        output_df = spark.sql(f"""
-                                SELECT
-                                    *,
-                                    YEAR({date_col}) AS year,
-                                    MONTH({date_col}) AS month,
-                                    DAY({date_col}) AS day
-                                FROM mysql_table
-                                WHERE {primary_col} > {latest_record}
-                                """)
-        
-        new_records_cnt = output_df.selectExpr(f"COUNT({primary_col})").collect()[0][0]
-        if new_records_cnt:
-            print(f"{BOLD_YELLOW}Ingesting {new_records_cnt} new records into table {table_name} in datalake.{RESET}")
-            logger.info(f"Ingesting {new_records_cnt} new records into table {table_name} in datalake.")
-            output_df.write.partitionBy("year", "month", "day").mode("append").parquet(table_dir_str)
-        else:
-            print(f"{BOLD_YELLOW}Table {table_name} in Datalake is up to date with MySQL Database.{RESET}")
-            logger.info(f"Table {table_name} in Datalake is up to date with MySQL Database.")
+            
+        mysql_df.write.parquet(table_dir_str)
+        print(f"{BOLD_YELLOW}Ingested {table_name} into in datalake.{RESET}")
+        logger.info(f"{BOLD_YELLOW}Ingested {table_name} into in datalake.{RESET}")
     
     finally:
         # Stop the Spark session
