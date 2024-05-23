@@ -5,6 +5,7 @@
 --table_name SalesOrderDetail
 
 ./spark-submit \
+--master yarn \
 --jars /home/phinguyen/lib/mysql-connector-j-8.0.33.jar \
 /home/phinguyen/ETL_Pipeline_with_Spark_01/src/pipelines/ingestion_fixed_table.py \
 --table_name Product

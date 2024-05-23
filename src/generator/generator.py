@@ -8,6 +8,7 @@ from multiprocessing import Process, Value, Lock, Manager
 from faker import Faker
 from typing import List, Dict
 import csv
+from datetime import datetime, timedelta
 
 class DataGenerator:
     def __init__(self, conn: DBConnection) -> None:
@@ -125,13 +126,10 @@ class DataGenerator:
         
         # Get current max_customer_id and max_sales_order_id from mysql database
         try:
-            self.conn.connect()
             max_customer_id = self.conn.execute_query("SELECT MAX(CustomerId) FROM Customer")[0][0]
             max_sales_order_id = self.conn.execute_query("SELECT MAX(SalesOrderId) FROM SalesOrderHeader")[0][0]
         except Exception as e:
             raise Exception(e)
-        finally:
-            self.conn.close()
         
         n_orders_per_process = n_orders // n_processes
         remainder_orders = n_orders % n_processes
@@ -159,26 +157,34 @@ class DataGenerator:
     def generate_and_load(
         self,
         n_orders: int, 
-        order_date: str,
+        start_date: str,
+        end_date: str,
         n_processes: int
     ) -> None:
-        print("Start generating data and save into csv files.")
-        table_names_and_paths = self.generate_1_day_sales_data(n_orders, order_date, n_processes)
-        print("Finish generating data and save into csv files.")
         try:
             self.conn.connect()
-            for table, csv_path in table_names_and_paths.items():
-                load_query = f"""
-                    LOAD DATA LOCAL INFILE '{csv_path}'
-                    INTO TABLE {table}
-                    FIELDS TERMINATED BY ','  -- specify the delimiter used in your CSV file
-                    ENCLOSED BY '"'           -- specify if the fields are enclosed by a specific character
-                    LINES TERMINATED BY '\n'  -- specify the line terminator
-                    IGNORE 1 LINES            -- skip the header row if your CSV has a header
-                    """
-                print(f"Start loading csv file from {csv_path} into table {table}")
-                self.conn.execute_query(load_query)
-                print(f"Finish loading csv file from {csv_path} into table {table}")
+            start_date = datetime.strptime(start_date, "%Y-%m-%d")
+            end_date = datetime.strptime(end_date, "%Y-%m-%d")
+            number_of_days = (end_date - start_date).days + 1  # Include end_date in the range
+            # Generate list of dates
+            date_list = [(start_date + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(number_of_days)]
+            
+            for order_date in date_list:
+                print(f"Start generating sales data for {order_date} and save into csv files.")
+                table_names_and_paths = self.generate_1_day_sales_data(n_orders, order_date, n_processes)
+                print("Finish generating data.")
+                for table, csv_path in table_names_and_paths.items():
+                    load_query = f"""
+                        LOAD DATA LOCAL INFILE '{csv_path}'
+                        INTO TABLE {table}
+                        FIELDS TERMINATED BY ','  -- specify the delimiter used in your CSV file
+                        ENCLOSED BY '"'           -- specify if the fields are enclosed by a specific character
+                        LINES TERMINATED BY '\n'  -- specify the line terminator
+                        IGNORE 1 LINES            -- skip the header row if your CSV has a header
+                        """
+                    print(f"Start loading csv file from {csv_path} into table {table}")
+                    self.conn.execute_query(load_query)
+                    print(f"Finish loading csv file.")
         except Exception as e:
             raise Exception(e)
         finally:

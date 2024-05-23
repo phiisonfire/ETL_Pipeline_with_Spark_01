@@ -5,16 +5,9 @@ import time
 from datetime import datetime, timedelta
 
 def main(n_each_day: int, start_date: str, end_date: str, n_processes: int = 8):
-    start_date = datetime.strptime(start_date, "%Y-%m-%d")
-    end_date = datetime.strptime(end_date, "%Y-%m-%d")
-    number_of_days = (end_date - start_date).days + 1  # Include end_date in the range
-    
-    # Generate list of dates
-    date_list = [(start_date + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(number_of_days)]
-    for order_date in date_list:
-        conn = DBConnection()
-        generator = DataGenerator(conn)
-        generator.generate_and_load(n_orders=n_each_day, order_date=order_date, n_processes=n_processes)
+    conn = DBConnection()
+    generator = DataGenerator(conn)
+    generator.generate_and_load(n_each_day, start_date, end_date, n_processes)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Generate sales data.')
