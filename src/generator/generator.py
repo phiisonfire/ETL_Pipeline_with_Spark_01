@@ -183,7 +183,7 @@ class DataGenerator:
                         IGNORE 1 LINES            -- skip the header row if your CSV has a header
                         """
                     print(f"Start loading csv file from {csv_path} into table {table}")
-                    self.conn.execute_query(load_query)
+                    self.conn.execute_query(load_query, is_load=True)
                     print(f"Finish loading csv file.")
         except Exception as e:
             raise Exception(e)
