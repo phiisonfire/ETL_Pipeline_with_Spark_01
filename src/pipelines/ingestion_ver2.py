@@ -1,6 +1,8 @@
 import os
+import sys
 from dotenv import load_dotenv
 from pyspark.sql import SparkSession
+from pyspark.storagelevel import StorageLevel
 import argparse
 import logging
 
@@ -69,7 +71,7 @@ def main(table_name: str) -> None:
         .config("spark.executor.memory", "2g") \
         .config("spark.executor.cores", "2") \
         .config("spark.executor.instances", "2") \
-        .appName("Ingestion - from OLTP Database (MySQL) to DataLake (Hadoop HDFS)") \
+        .appName(f"Ingesting {table_name} - from OLTP Database (MySQL) to DataLake (Hadoop HDFS)") \
         .getOrCreate()
     
     try:
@@ -86,30 +88,26 @@ def main(table_name: str) -> None:
             latest_record = 0
         
         # Load new data from MySQL
-        mysql_df = spark.read.format("jdbc") \
+        new_records_from_mysql_df = spark.read.format("jdbc") \
             .option("url", f"jdbc:mysql://{mysql_host}:3306/{mysql_database_name}") \
             .option("driver", "com.mysql.cj.jdbc.Driver") \
             .option("dbtable", table_name) \
             .option("user", mysql_user) \
             .option("password", mysql_password) \
+            .option("partitionColumn", primary_col) \
+            .option("lowerBound", latest_record + 1) \
+            .option("upperBound", sys.maxsize) \
+            .option("numPartitions", 2) \
             .load()
         
-        mysql_df.createOrReplaceTempView("mysql_table")
-        output_df = spark.sql(f"""
-                                SELECT
-                                    *,
-                                    YEAR({date_col}) AS year,
-                                    MONTH({date_col}) AS month,
-                                    DAY({date_col}) AS day
-                                FROM mysql_table
-                                WHERE {primary_col} > {latest_record}
-                                """)
+        # Persist DataFrame both in memory and on disk for multiple reusage
+        new_records_from_mysql_df.persist(StorageLevel.MEMORY_AND_DISK)
         
-        new_records_cnt = output_df.selectExpr(f"COUNT({primary_col})").collect()[0][0]
+        new_records_cnt = new_records_from_mysql_df.count()
         if new_records_cnt:
             print(f"{BOLD_YELLOW}Ingesting {new_records_cnt} new records into table {table_name} in datalake.{RESET}")
             logger.info(f"Ingesting {new_records_cnt} new records into table {table_name} in datalake.")
-            output_df.write.partitionBy("year", "month", "day").mode("append").parquet(table_dir_str)
+            new_records_from_mysql_df.write.partitionBy("year", "month", "day").mode("append").parquet(table_dir_str)
         else:
             print(f"{BOLD_YELLOW}Table {table_name} in Datalake is up to date with MySQL Database.{RESET}")
             logger.info(f"Table {table_name} in Datalake is up to date with MySQL Database.")
