@@ -61,7 +61,7 @@ class DataGenerator:
 
             batch_end = min(batch_start + batch_size, n_orders)
             for _ in range(batch_start, batch_end):
-                if randint(1, 10) > 8:
+                if randint(1, 10) > 8 or max_customer_id == 0:
                     max_customer_id += 1
                     curr_customer_id = max_customer_id
                     new_customer = (
@@ -73,6 +73,7 @@ class DataGenerator:
                     )
                     customer_data.append(new_customer)
                 else:
+
                     curr_customer_id = randint(1, max_customer_id)
 
                 max_sales_order_id += 1
@@ -184,13 +185,14 @@ class DataGenerator:
                         IGNORE 1 LINES            -- skip the header row if your CSV has a header
                         """
                     print(f"Start loading csv file from {csv_path} into table {table}")
-                    self.conn.execute_query(load_query)
+                    self.conn.execute_query(load_query, is_load=True)
                     print(f"Finish loading csv file.")
         except Exception as e:
             raise Exception(e)
         finally:
             self.conn.close()
-            
+
+
 if __name__ == "__main__":
     conn = DBConnection()
     generator = DataGenerator(conn)

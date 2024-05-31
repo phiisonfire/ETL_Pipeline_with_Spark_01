@@ -64,11 +64,13 @@ def main(table_name: str) -> None:
 
     # Create Spark session
     spark = SparkSession.builder \
-        .config("spark.driver.memory", "2g") \
+        .config("spark.driver.memory", "1g") \
         .config("spark.driver.cores", "1") \
-        .config("spark.executor.memory", "4g") \
+        .config("spark.executor.memory", "6g") \
         .config("spark.executor.cores", "4") \
-        .appName("Ingestion - from OLTP Database (MySQL) to DataLake (Hadoop HDFS)") \
+        .config("spark.executor.instances", "1") \
+        .config("spark.dynamicAllocation.enabled", False) \
+        .appName(f"Ingesting {table_name} - oltpDBtoDLake") \
         .getOrCreate()
     
     try:
@@ -80,10 +82,19 @@ def main(table_name: str) -> None:
         if fs.exists(hdfs_table_dir_path):
             hdfs_df = spark.read.parquet(table_dir_str)
             hdfs_df.createOrReplaceTempView("hdfs_table")
-            latest_record = spark.sql(f"SELECT MAX({primary_col}) FROM hdfs_table").collect()[0][0]
+            lake_latest_record = spark.sql(f"SELECT MAX({primary_col}) FROM hdfs_table").collect()[0][0]
         else:
-            latest_record = 0
+            lake_latest_record = 0
         
+        # get latest record id in OLTP
+        oltp_latest_record = spark.read.format("jdbc") \
+            .option("url", f"jdbc:mysql://{mysql_host}:3306/{mysql_database_name}") \
+            .option("driver", "com.mysql.cj.jdbc.Driver") \
+            .option("user", mysql_user) \
+            .option("password", mysql_password) \
+            .option("query", f"SELECT MAX({primary_col}) FROM {table_name}") \
+            .load().collect()[0][0]
+
         # Load new data from MySQL
         mysql_df = spark.read.format("jdbc") \
             .option("url", f"jdbc:mysql://{mysql_host}:3306/{mysql_database_name}") \
@@ -91,6 +102,10 @@ def main(table_name: str) -> None:
             .option("dbtable", table_name) \
             .option("user", mysql_user) \
             .option("password", mysql_password) \
+            .option("partitionColumn", primary_col) \
+            .option("lowerBound", lake_latest_record + 1) \
+            .option("upperBound", oltp_latest_record) \
+            .option("numPartitions", 60) \
             .load()
         
         mysql_df.createOrReplaceTempView("mysql_table")
@@ -101,7 +116,6 @@ def main(table_name: str) -> None:
                                     MONTH({date_col}) AS month,
                                     DAY({date_col}) AS day
                                 FROM mysql_table
-                                WHERE {primary_col} > {latest_record}
                                 """)
         
         new_records_cnt = output_df.selectExpr(f"COUNT({primary_col})").collect()[0][0]

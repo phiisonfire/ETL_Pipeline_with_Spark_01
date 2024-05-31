@@ -2,7 +2,6 @@ import argparse
 from src.utils.db_connection import DBConnection
 from src.generator.generator import DataGenerator
 import time
-from datetime import datetime, timedelta
 
 def main(n_each_day: int, start_date: str, end_date: str):
     conn = DBConnection()
