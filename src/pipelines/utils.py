@@ -21,6 +21,7 @@ def get_hdfs_FileSystem_obj(spark: SparkSession, hdfs_uri: str) -> bool:
 
     Usage:
     fs = get_hdfs_FileSystem_obj(spark, "hdfs://localhost:9000")
+    fs.exist(hdfs_path_object)
     """
     
     # Import necessary classes from Java
@@ -35,22 +36,8 @@ def get_hdfs_FileSystem_obj(spark: SparkSession, hdfs_uri: str) -> bool:
     # Create a FileSystem object
     return spark._jvm.FileSystem.get(hadoop_conf)
 
-def is_hdfs_path_exist(spark: SparkSession, hdfs_uri: str, hdfs_path: str) -> bool:
+def get_hdfs_path_object(spark: SparkSession, hdfs_path: str):
     """
-    Checks if a given HDFS path exists.
-
-    Parameters:
-    spark (SparkSession): The active SparkSession.
-    hdfs_uri (str): The URI of the HDFS namenode.
-    hdfs_path (str): The HDFS path to check for existence.
-
-    Returns:
-    bool: True if the HDFS path exists, False otherwise.
-
-    Usage:
-    path_exists = is_hdfs_path_exist(spark, "hdfs://localhost:9000", "/user/hive/warehouse")
+    This function receive a hdfs_path as string and return a jvm.Path() object that can be used with Hadoop FileSystem Object.
     """
-    fs = get_hdfs_FileSystem_obj(spark, hdfs_uri)
-    hdfs_path_obj = spark._jvm.Path(hdfs_path)
-
-    return fs.exists(hdfs_path_obj)
+    return spark._jvm.Path(hdfs_path)

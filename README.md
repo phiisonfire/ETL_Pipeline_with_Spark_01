@@ -33,3 +33,13 @@ CREATE TABLE ProductCategory (
   EnglishProductCategoryName VARCHAR(255) UNIQUE
 );
 
+7. ETL datalake -> Hive
+
+./spark-submit \
+--master yarn \
+--jars /home/phinguyen/lib/mysql-connector-j-8.0.33.jar \
+--driver-cores 1 \
+--driver-memory 1g \
+--executor-cores 2 \
+--executor-memory 2g \
+/home/phinguyen/ETL_Pipeline_with_Spark_01/src/pipelines/transformation.py

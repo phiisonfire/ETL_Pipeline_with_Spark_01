@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 from pyspark.sql import SparkSession
 import argparse
 import logging
+from src.pipelines.utils import get_hdfs_FileSystem_obj, get_hdfs_path_object
 
 # Setup logging
 logs_dir = "logs"
@@ -18,21 +19,6 @@ logger = logging.getLogger(__name__)
 # Add ANSI escape sequences for bold yellow text
 BOLD_YELLOW = "\033[1m\033[93m"
 RESET = "\033[0m"
-
-def get_hdfs_FileSystem_obj(spark: SparkSession, hdfs_uri: str):
-    from py4j.java_gateway import java_import
-    
-    # Import necessary classes from Java
-    java_import(spark._jvm, 'org.apache.hadoop.fs.FileSystem')
-    java_import(spark._jvm, 'org.apache.hadoop.fs.Path')
-    java_import(spark._jvm, 'org.apache.hadoop.fs.FileStatus')
-    
-    # Get the Hadoop configuration
-    hadoop_conf = spark._jsc.hadoopConfiguration()
-    hadoop_conf.set("fs.defaultFS", hdfs_uri)
-
-    # Create a FileSystem object
-    return spark._jvm.FileSystem.get(hadoop_conf)
 
 def main(table_name: str) -> None:
     # Define table-specific details
@@ -66,17 +52,17 @@ def main(table_name: str) -> None:
     spark = SparkSession.builder \
         .config("spark.driver.memory", "1g") \
         .config("spark.driver.cores", "1") \
-        .config("spark.executor.memory", "6g") \
-        .config("spark.executor.cores", "4") \
-        .config("spark.executor.instances", "1") \
+        .config("spark.executor.memory", "2g") \
+        .config("spark.executor.cores", "2") \
+        .config("spark.executor.instances", "2") \
         .config("spark.dynamicAllocation.enabled", False) \
         .appName(f"Ingesting {table_name} - oltpDBtoDLake") \
         .getOrCreate()
     
     try:
-        fs = get_hdfs_FileSystem_obj(spark, hdfs_uri="hdfs://localhost:9000")
         table_dir_str = "/datalake/" + table_name
-        hdfs_table_dir_path = spark._jvm.Path(table_dir_str)
+        fs = get_hdfs_FileSystem_obj(spark, hdfs_uri="hdfs://localhost:9000")
+        hdfs_table_dir_path = get_hdfs_path_object(table_dir_str)
         
         # Check for existing data in HDFS
         if fs.exists(hdfs_table_dir_path):
