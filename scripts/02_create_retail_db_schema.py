@@ -1,6 +1,8 @@
 import argparse
 import yaml
 from src.utils.db_connection import DBConnection
+import os
+
 
 def create_table(cursor, table_name, fields):
     query = f"CREATE TABLE {table_name} ("
@@ -31,8 +33,10 @@ def create_tables(schema_file):
         create_table(cursor, table_name, fields)
         print(f"Created table {table_name} in database {conn.database}")
 
-if __name__ == "__main__":
+create_tables("/home/phinguyen/data_engineering/ETL_Pipeline_with_Spark_01/sample_data/retail_db_schema.yaml")
+
+"""if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Create retail_db schema.')
     parser.add_argument('--database_schema_path', type=str, required=True, help='Path to database schema')
     args = parser.parse_args()
-    create_tables(args.database_schema_path)
+    create_tables(args.database_schema_path)"""

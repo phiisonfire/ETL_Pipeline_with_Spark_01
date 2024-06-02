@@ -62,7 +62,7 @@ def main(table_name: str) -> None:
         .getOrCreate()
     
     try:
-        fs = get_hdfs_FileSystem_obj(spark, hdfs_uri="hdfs://localhost:9900")
+        fs = get_hdfs_FileSystem_obj(spark, hdfs_uri="hdfs://localhost:9000")
         table_dir_str = "/datalake/" + table_name
         hdfs_table_dir_path = spark._jvm.Path(table_dir_str)
         
