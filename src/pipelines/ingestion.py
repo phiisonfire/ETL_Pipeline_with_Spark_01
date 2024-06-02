@@ -17,7 +17,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Add ANSI escape sequences for bold yellow text
-BOLD_YELLOW = "\033[1m\033[93m"
+BOLD_YELLOW = "\033[1m\033[32m"
 RESET = "\033[0m"
 
 def main(table_name: str) -> None:
@@ -62,7 +62,7 @@ def main(table_name: str) -> None:
     try:
         table_dir_str = "/datalake/" + table_name
         fs = get_hdfs_FileSystem_obj(spark, hdfs_uri="hdfs://localhost:9000")
-        hdfs_table_dir_path = get_hdfs_path_object(table_dir_str)
+        hdfs_table_dir_path = get_hdfs_path_object(spark, table_dir_str)
         
         # Check for existing data in HDFS
         if fs.exists(hdfs_table_dir_path):
@@ -81,31 +81,33 @@ def main(table_name: str) -> None:
             .option("query", f"SELECT MAX({primary_col}) FROM {table_name}") \
             .load().collect()[0][0]
 
-        # Load new data from MySQL
-        mysql_df = spark.read.format("jdbc") \
-            .option("url", f"jdbc:mysql://{mysql_host}:3306/{mysql_database_name}") \
-            .option("driver", "com.mysql.cj.jdbc.Driver") \
-            .option("dbtable", table_name) \
-            .option("user", mysql_user) \
-            .option("password", mysql_password) \
-            .option("partitionColumn", primary_col) \
-            .option("lowerBound", lake_latest_record + 1) \
-            .option("upperBound", oltp_latest_record) \
-            .option("numPartitions", 60) \
-            .load()
         
-        mysql_df.createOrReplaceTempView("mysql_table")
-        output_df = spark.sql(f"""
-                                SELECT
-                                    *,
-                                    YEAR({date_col}) AS year,
-                                    MONTH({date_col}) AS month,
-                                    DAY({date_col}) AS day
-                                FROM mysql_table
-                                """)
-        
-        new_records_cnt = output_df.selectExpr(f"COUNT({primary_col})").collect()[0][0]
-        if new_records_cnt:
+        new_records_cnt = oltp_latest_record - lake_latest_record
+        if new_records_cnt > 0:
+
+            # Load new data from MySQL
+            mysql_df = spark.read.format("jdbc") \
+                .option("url", f"jdbc:mysql://{mysql_host}:3306/{mysql_database_name}") \
+                .option("driver", "com.mysql.cj.jdbc.Driver") \
+                .option("dbtable", f"(SELECT * FROM {table_name} WHERE {primary_col} > {lake_latest_record}) as tmp") \
+                .option("user", mysql_user) \
+                .option("password", mysql_password) \
+                .option("partitionColumn", primary_col) \
+                .option("lowerBound", lake_latest_record + 1) \
+                .option("upperBound", oltp_latest_record) \
+                .option("numPartitions", 20) \
+                .load()
+            
+            mysql_df.createOrReplaceTempView("mysql_table")
+            output_df = spark.sql(f"""
+                                    SELECT
+                                        *,
+                                        YEAR({date_col}) AS year,
+                                        MONTH({date_col}) AS month,
+                                        DAY({date_col}) AS day
+                                    FROM mysql_table
+                                    """)
+            
             print(f"{BOLD_YELLOW}Ingesting {new_records_cnt} new records into table {table_name} in datalake.{RESET}")
             logger.info(f"Ingesting {new_records_cnt} new records into table {table_name} in datalake.")
             output_df.write.partitionBy("year", "month", "day").mode("append").parquet(table_dir_str)

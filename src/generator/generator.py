@@ -4,9 +4,8 @@ from src.generator.schema import load_table_schema_from_yaml
 import pandas as pd
 import numpy as np
 from random import randint
-from multiprocessing import Process, Value, Lock, Manager
 from faker import Faker
-from typing import List, Dict
+from typing import Dict
 import csv
 from datetime import datetime, timedelta
 from tqdm import tqdm
