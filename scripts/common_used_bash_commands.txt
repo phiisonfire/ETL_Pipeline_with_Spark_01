@@ -2,8 +2,7 @@
 
 1. create database schema for mysql
 
-python scripts/02_create_retail_db_schema.py \
---database_schema_path /home/phinguyen/data_engineering/ETL_Pipeline_with_Spark_01/sample_data/retail_db_schema.yaml
+python scripts/02_create_retail_db_schema.py
 
 2. load table Product, ProductCategory from .csv files into corresponding tables in mysql
 

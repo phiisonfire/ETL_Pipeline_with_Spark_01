@@ -11,6 +11,7 @@ class DBConnection:
         self.user = os.getenv('MYSQL_USER')
         self.password = os.getenv('MYSQL_PASSWORD')
         self.host = os.getenv('MYSQL_HOST')
+        self.port = os.getenv('MYSQL_PORT')
         self.database = os.getenv('MYSQL_DATABASE')
         self.connection = None
     
@@ -20,6 +21,7 @@ class DBConnection:
                 user=self.user,
                 password=self.password,
                 host=self.host,
+                port=self.port,
                 database=self.database,
                 allow_local_infile=True  # Enable local infile
             )
