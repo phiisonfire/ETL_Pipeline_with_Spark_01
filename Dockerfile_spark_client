@@ -1,0 +1,60 @@
+FROM bde2020/hadoop-base:2.0.0-hadoop3.3.6-java8-ubuntu
+
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    python3-pip wget && rm -rf /var/lib/apt/lists/*
+
+RUN printf "<configuration>\n</configuration>\n" > /etc/hadoop/capacity-scheduler.xml \
+    && sed -i '/configure \/etc\/hadoop\/mapred-site.xml mapred MAPRED_CONF/ a configure /etc/hadoop/capacity-scheduler.xml capsched CAP_SCHED_CONF' /entrypoint.sh \
+    && sed -i 's/addProperty \/etc\/hadoop\/\$module-site.xml \$name \"\$value\"/addProperty \$path \$name \"\$value\"/g' /entrypoint.sh
+
+ENV SPARK_VERSION=3.5.1
+ENV HADOOP_VERSION_FOR_DOWNLOAD=3
+ENV SPARK_DOWNLOAD_URL=https://dlcdn.apache.org/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION_FOR_DOWNLOAD}.tgz
+
+RUN wget ${SPARK_DOWNLOAD_URL} && \
+    tar zxvf spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION_FOR_DOWNLOAD}.tgz && \
+    rm spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION_FOR_DOWNLOAD}.tgz && \
+    mv spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION_FOR_DOWNLOAD} /opt/spark && \
+    echo "export PATH=$PATH:/opt/spark/bin" >> /root/.bashrc && \
+    echo "export SPARK_HOME=/opt/spark" >> /root/.bashrc
+
+RUN  echo "export PYSPARK_PYTHON=python3" >> /root/.bashrc
+
+# derby.system.home => https://www.ibm.com/support/knowledgecenter/en/SS3H8V_1.1.0/com.ibm.izoda.v1r1.azka100/topics/azkic_t_updconfigfiles.htm
+RUN mkdir /tmp/spark-events && echo '\
+spark.eventLog.enabled          true \n\
+spark.eventLog.dir              file:///spark-history \n\
+spark.history.fs.logDirectory   file:///spark-history \n\
+spark.yarn.historyServer.address 0.0.0.0:18080 \n\
+spark.history.ui.port 18080 \n\
+' > /opt/spark/conf/spark-defaults.conf
+
+# mysql connector driver
+RUN wget -P /opt/spark/jars/ https://repo1.maven.org/maven2/com/mysql/mysql-connector-j/8.0.33/mysql-connector-j-8.0.33.jar
+
+RUN mkdir /spark-history
+
+RUN echo '\
+export HADOOP_CONF_DIR=/opt/hadoop-3.3.6/etc/hadoop \n\
+export YARN_CONF_DIR=/opt/hadoop-3.3.6/etc/hadoop \n\
+export PYSPARK_PYTHON=python3 \
+' > /opt/spark/conf/spark-env.sh
+
+ADD start-history-ui.sh /usr/local/bin
+RUN chmod a+x /usr/local/bin/start-history-ui.sh
+
+COPY dags /app/dags
+COPY sample_data /app/sample_data
+COPY scripts /app/scripts
+COPY src /app/src
+COPY __init__.py /app
+COPY .env /app
+COPY requirements.txt /app
+COPY setup.py /app
+WORKDIR /app
+RUN pip install .
+
+WORKDIR "/opt/spark"
+
+# Keep the container running
+CMD ["/bin/bash", "-c", "/usr/local/bin/start-history-ui.sh"]

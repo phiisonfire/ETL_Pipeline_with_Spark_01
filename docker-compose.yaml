@@ -1,7 +1,8 @@
 version: '3.8'
 services:
-  db:
+  mysql:
     image: mysql:8.0
+    container_name: mysql
     cap_add:
       - SYS_NICE
     restart: always
@@ -9,12 +10,135 @@ services:
       - .env
     environment:
       - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+    expose:
+      - 3306
     ports:
       - '${MYSQL_PORT}:3306'
+    networks:
+      - yarn_net
     volumes:
-      - db:/var/lib/mysql
+      - mysql:/var/lib/mysql
       - ./docker-entrypoints/mysql/mysql_init.sql:/docker-entrypoint-initdb.d/init.sql
     command: --local-infile=1
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+  
+  spark-client:
+    build: 
+      context: .
+      dockerfile: Dockerfile_spark_client
+    image: spark-client:bde2020-hadoop
+    container_name: sparkcli
+    environment:
+      SERVICE_PRECONDITION: "resourcemanager:8088"
+    ports:
+      - 18080:18080
+    networks:
+      - yarn_net
+    env_file:
+      - ./hadoop.env
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:18080/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  resourcemanager:
+    image: bde2020/hadoop-resourcemanager:2.0.0-hadoop3.1.1-java8
+    container_name: resourcemanager
+    environment:
+      SERVICE_PRECONDITION: "namenode:9870 datanode1:9864 datanode2:9864"
+    expose:
+      - 8088
+      - 8032
+      - 8030
+      - 8031
+    ports:
+      - 8088:8088
+    networks:
+      - yarn_net
+    env_file:
+      - ./hadoop.env
+
+  nodemanager:
+    image: bde2020/hadoop-nodemanager:2.0.0-hadoop3.1.1-java8
+    container_name: nodemanager
+    environment:
+      SERVICE_PRECONDITION: "namenode:9870 datanode1:9864 datanode2:9864 resourcemanager:8088"
+    expose:
+      - "1000-65535"
+    networks:
+      - yarn_net
+    env_file:
+      - ./hadoop.env
+
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.1.1-java8
+    container_name: namenode
+    ports:
+      - 9870:9870
+    expose:
+      - 9000
+    volumes:
+      - hadoop_namenode:/hadoop/dfs/name
+    environment:
+      - CLUSTER_NAME=test
+    networks:
+      - yarn_net
+    env_file:
+      - ./hadoop.env
+
+  datanode1:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.1.1-java8
+    container_name: datanode1
+    expose:
+      - 9864
+    volumes:
+      - hadoop_datanode1:/hadoop/dfs/data
+    environment:
+      SERVICE_PRECONDITION: "namenode:9870"
+    networks:
+      - yarn_net
+    env_file:
+      - ./hadoop.env
+  
+  datanode2:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.1.1-java8
+    container_name: datanode2
+    expose:
+      - 9864
+    volumes:
+      - hadoop_datanode2:/hadoop/dfs/data
+    environment:
+      SERVICE_PRECONDITION: "namenode:9870"
+    networks:
+      - yarn_net
+    env_file:
+      - ./hadoop.env
+
+  historyserver:
+    image: bde2020/hadoop-historyserver:2.0.0-hadoop3.1.1-java8
+    container_name: historyserver
+    ports:
+      - 8188:8188
+    environment:
+      SERVICE_PRECONDITION: "namenode:9870 datanode1:9864 datanode2:9864 resourcemanager:8088"
+    volumes:
+      - hadoop_historyserver:/hadoop/yarn/timeline
+    networks:
+      - yarn_net
+    env_file:
+      - ./hadoop.env
+
 volumes:
-  db:
-    driver: local
+  mysql:
+  hadoop_namenode:
+  hadoop_datanode1:
+  hadoop_datanode2:
+  hadoop_historyserver:
+
+networks:
+  yarn_net:
