@@ -57,7 +57,6 @@ def main(table_name: str) -> None:
 
     # Create Spark session
     spark = SparkSession.builder \
-        .master("yarn") \
         .appName("Ingestion fixed tables - from OLTP Database (MySQL) to DataLake (Hadoop HDFS)") \
         .getOrCreate()
     

@@ -3,6 +3,7 @@ services:
   mysql:
     image: mysql:8.0
     container_name: mysql
+    hostname: mysql
     cap_add:
       - SYS_NICE
     restart: always
@@ -32,6 +33,7 @@ services:
       dockerfile: Dockerfile_spark_client
     image: spark-client:bde2020-hadoop
     container_name: sparkcli
+    hostname: sparkcli
     environment:
       SERVICE_PRECONDITION: "resourcemanager:8088"
     ports:
@@ -49,6 +51,7 @@ services:
   resourcemanager:
     image: bde2020/hadoop-resourcemanager:2.0.0-hadoop3.1.1-java8
     container_name: resourcemanager
+    hostname: resourcemanager
     environment:
       SERVICE_PRECONDITION: "namenode:9870 datanode1:9864 datanode2:9864"
     expose:
@@ -62,10 +65,12 @@ services:
       - yarn_net
     env_file:
       - ./hadoop.env
+    restart: on-failure
 
   nodemanager:
     image: bde2020/hadoop-nodemanager:2.0.0-hadoop3.1.1-java8
     container_name: nodemanager
+    hostname: nodemanager
     environment:
       SERVICE_PRECONDITION: "namenode:9870 datanode1:9864 datanode2:9864 resourcemanager:8088"
     expose:
@@ -78,6 +83,7 @@ services:
   namenode:
     image: bde2020/hadoop-namenode:2.0.0-hadoop3.1.1-java8
     container_name: namenode
+    hostname: namenode
     ports:
       - 9870:9870
     expose:
@@ -94,6 +100,7 @@ services:
   datanode1:
     image: bde2020/hadoop-datanode:2.0.0-hadoop3.1.1-java8
     container_name: datanode1
+    hostname: datanode1
     expose:
       - 9864
     volumes:
@@ -108,6 +115,7 @@ services:
   datanode2:
     image: bde2020/hadoop-datanode:2.0.0-hadoop3.1.1-java8
     container_name: datanode2
+    hostname: datanode2
     expose:
       - 9864
     volumes:
@@ -122,6 +130,7 @@ services:
   historyserver:
     image: bde2020/hadoop-historyserver:2.0.0-hadoop3.1.1-java8
     container_name: historyserver
+    hostname: historyserver
     ports:
       - 8188:8188
     environment:

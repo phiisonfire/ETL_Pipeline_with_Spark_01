@@ -48,9 +48,14 @@ COPY sample_data /app/sample_data
 COPY scripts /app/scripts
 COPY src /app/src
 COPY __init__.py /app
-COPY .env /app
 COPY requirements.txt /app
 COPY setup.py /app
+
+# Copy and modify .env file
+COPY .env /app/.env
+RUN sed -i 's/MYSQL_HOST=127.0.0.1/MYSQL_HOST=mysql/' /app/.env \
+    && sed -i 's/MYSQL_PORT=3307/MYSQL_PORT=3306/' /app/.env
+
 WORKDIR /app
 RUN pip install .
 

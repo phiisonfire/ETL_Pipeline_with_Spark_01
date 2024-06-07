@@ -18,25 +18,23 @@ python scripts/03_generate_multiple_date_sales_data_with_load.py \
 4. ingest fixed tables (ProductCategory & Product), without partitioning
 /opt/spark/bin/spark-submit \
 --master yarn \
+--deploy-mode client \
+--driver-cores 1 \
+--driver-memory 1g \
+--executor-cores 2 \
+--executor-memory 2g \
 /app/src/pipelines/ingestion_fixed_table.py \
 --table_name ProductCategory
 
-docker exec -it sparkcli /opt/spark/bin/spark-submit \
---master yarn \
-/home/phinguyen/data_engineering/ETL_Pipeline_with_Spark_01/src/pipelines/ingestion_fixed_table.py \
---table_name ProductCategory
-
-./spark-submit \
---master yarn \
---jars /home/phinguyen/lib/mysql-connector-j-8.0.33.jar \
-/home/phinguyen/data_engineering/ETL_Pipeline_with_Spark_01/src/pipelines/ingestion_fixed_table.py \
---table_name Product
-
 5. ingest Customers, SalesOrderHeader and SalesOrderDetail tables
-./spark-submit \
+/opt/spark/bin/spark-submit \
 --master yarn \
---jars /home/phinguyen/lib/mysql-connector-j-8.0.33.jar \
-/home/phinguyen/data_engineering/ETL_Pipeline_with_Spark_01/src/pipelines/ingestion.py \
+--deploy-mode client \
+--driver-cores 1 \
+--driver-memory 1g \
+--executor-cores 2 \
+--executor-memory 2g \
+/app/src/pipelines/ingestion.py \
 --table_name Customer
 
 6. ETL datalake -> Hive

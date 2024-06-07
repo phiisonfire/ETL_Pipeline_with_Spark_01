@@ -50,18 +50,13 @@ def main(table_name: str) -> None:
 
     # Create Spark session
     spark = SparkSession.builder \
-        .config("spark.driver.memory", "1g") \
-        .config("spark.driver.cores", "1") \
-        .config("spark.executor.memory", "2g") \
-        .config("spark.executor.cores", "2") \
-        .config("spark.executor.instances", "2") \
         .config("spark.dynamicAllocation.enabled", False) \
         .appName(f"Ingesting {table_name} - oltpDBtoDLake") \
         .getOrCreate()
     
     try:
         table_dir_str = "/datalake/" + table_name
-        fs = get_hdfs_FileSystem_obj(spark, hdfs_uri="hdfs://localhost:9000")
+        fs = get_hdfs_FileSystem_obj(spark, hdfs_uri="hdfs://namenode:9000")
         hdfs_table_dir_path = get_hdfs_path_object(spark, table_dir_str)
         
         # Check for existing data in HDFS
