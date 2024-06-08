@@ -22,10 +22,10 @@ def main():
         .enableHiveSupport() \
         .getOrCreate()
     
-    lake_Product_df = spark.read.parquet("hdfs://localhost:9000/datalake/Product")
-    lake_Customer_df = spark.read.parquet('hdfs://localhost:9000/datalake/Customer')
-    lake_SalesOrderHeader_df = spark.read.parquet("hdfs://localhost:9000/datalake/SalesOrderHeader")
-    lake_SalesOrderDetail_df = spark.read.parquet("hdfs://localhost:9000/datalake/SalesOrderDetail")
+    lake_Product_df = spark.read.parquet("hdfs://namenode:9000/datalake/Product")
+    lake_Customer_df = spark.read.parquet('hdfs://namenode:9000/datalake/Customer')
+    lake_SalesOrderHeader_df = spark.read.parquet("hdfs://namenode:9000/datalake/SalesOrderHeader")
+    lake_SalesOrderDetail_df = spark.read.parquet("hdfs://namenode:9000/datalake/SalesOrderDetail")
     
     lake_SalesOrderDetail_df.createOrReplaceTempView('SalesOrderDetail')
     lake_SalesOrderHeader_df.createOrReplaceTempView('SalesOrderHeader')
