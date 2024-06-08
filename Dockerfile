@@ -1,7 +1,9 @@
 FROM bde2020/hadoop-base:2.0.0-hadoop3.3.6-java8-ubuntu
 
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    python3-pip wget && rm -rf /var/lib/apt/lists/*
+# Install build tools and dependencies
+RUN apt-get update && \
+    apt-get install -y build-essential python3-dev python3-pip libffi-dev && \
+    rm -rf /var/lib/apt/lists/*
 
 RUN printf "<configuration>\n</configuration>\n" > /etc/hadoop/capacity-scheduler.xml \
     && sed -i '/configure \/etc\/hadoop\/mapred-site.xml mapred MAPRED_CONF/ a configure /etc/hadoop/capacity-scheduler.xml capsched CAP_SCHED_CONF' /entrypoint.sh \
@@ -60,15 +62,17 @@ RUN cp /opt/spark/jars/mysql-connector-j-8.0.33.jar ${HIVE_HOME}/lib/mysql-conne
 
 # Spark should be compiled with Hive to be able to use it
 # hive-site.xml should be copied to $SPARK_HOME/conf folder
+# Note: this added at runtime in entrypoint.sh
 
 # Add hive custom configuration from localhost development to container
-ADD hive_conf/hive-site.xml $HIVE_HOME/conf
-ADD hive_conf/beeline-log4j2.properties $HIVE_HOME/conf
-ADD hive_conf/hive-env.sh $HIVE_HOME/conf
-ADD hive_conf/hive-exec-log4j2.properties $HIVE_HOME/conf
-ADD hive_conf/hive-log4j2.properties $HIVE_HOME/conf
-ADD hive_conf/ivysettings.xml $HIVE_HOME/conf
-ADD hive_conf/llap-daemon-log4j2.properties $HIVE_HOME/conf
+ADD ./hive_conf/hive-site.xml $HIVE_HOME/conf
+ADD ./hive_conf/beeline-log4j2.properties $HIVE_HOME/conf
+ADD ./hive_conf/hive-env.sh $HIVE_HOME/conf
+ADD ./hive_conf/hive-exec-log4j2.properties $HIVE_HOME/conf
+ADD ./hive_conf/hive-log4j2.properties $HIVE_HOME/conf
+ADD ./hive_conf/ivysettings.xml $HIVE_HOME/conf
+ADD ./hive_conf/llap-daemon-log4j2.properties $HIVE_HOME/conf
+
 
 
 COPY startup.sh /usr/local/bin/

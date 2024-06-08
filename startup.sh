@@ -27,35 +27,48 @@ $HIVE_HOME/bin/hive --service metastore &
 echo "Starting HiveServer2..."
 $HIVE_HOME/bin/hiveserver2 --hiveconf hive.server2.enable.doAs=false &
 
-# Paths
-APP_DIR="/app"
-SOURCE_DIR="/source"
+pip install 
+AIRFLOW_VERSION=2.5.2
+PYTHON_VERSION=3.8
+CONSTRAINT_URL="https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-${PYTHON_VERSION}.txt"
+pip install "apache-airflow[async,postgres,google]==${AIRFLOW_VERSION}" --constraint "${CONSTRAINT_URL}"
 
-# Create necessary directories
-mkdir -p $APP_DIR/dags
-mkdir -p $APP_DIR/sample_data
-mkdir -p $APP_DIR/scripts
-mkdir -p $APP_DIR/src
-
-# Copy files from source to app directory
-cp -r $SOURCE_DIR/dags/* $APP_DIR/dags/
-cp -r $SOURCE_DIR/sample_data/* $APP_DIR/sample_data/
-cp -r $SOURCE_DIR/scripts/* $APP_DIR/scripts/
-cp -r $SOURCE_DIR/src/* $APP_DIR/src/
-cp $SOURCE_DIR/__init__.py $APP_DIR/
-cp $SOURCE_DIR/requirements.txt $APP_DIR/
-cp $SOURCE_DIR/setup.py $APP_DIR/
-cp $SOURCE_DIR/.env $APP_DIR/
+# Update airflow.cfg with MySQL connection and load_examples setting
+sed -i "s#sql_alchemy_conn = sqlite:////root/airflow/airflow.db#sql_alchemy_conn = mysql+mysqlconnector://airflow_user:airflow_password@mysql/airflow_db#" /root/airflow/airflow.cfg
+sed -i "s/load_examples = True/load_examples = False/" /root/airflow/airflow.cfg
+sed -i "s#dags_folder = /root/airflow/dags#dags_folder = /app/dags#" /root/airflow/airflow.cfg
 
 # Modify the .env file
-sed -i 's/MYSQL_HOST=127.0.0.1/MYSQL_HOST=mysql/' $APP_DIR/.env
-sed -i 's/MYSQL_PORT=3307/MYSQL_PORT=3306/' $APP_DIR/.env
+sed -i 's/MYSQL_HOST=127.0.0.1/MYSQL_HOST=mysql/' /app/.env
+sed -i 's/MYSQL_PORT=3307/MYSQL_PORT=3306/' /app/.env
 
 # Change to app directory
-cd $APP_DIR
+cd /app
 
 # Install Python dependencies
 pip install .
+
+
+
+# Function to check if the database is already initialized
+is_db_initialized() {
+  airflow db check || return 1
+}
+
+# Initialize the Airflow database if it hasn't been initialized
+if is_db_initialized; then
+  echo "Database is already initialized."
+else
+  echo "Initializing the Airflow database..."
+  airflow db init
+fi
+
+# Start airflow webserver and scheduler
+echo "Starting Airflow webserver at port 8080..."
+airflow webserver --port 8080 &
+
+echo "Starting Airflow scheduler..."
+airflow scheduler &
 
 /opt/spark/sbin/start-history-server.sh
 

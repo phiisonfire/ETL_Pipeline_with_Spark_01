@@ -1,4 +1,4 @@
-version: '3.8'
+version: '3.9'
 services:
   mysql:
     image: mysql:8.0
@@ -27,21 +27,22 @@ services:
       timeout: 10s
       retries: 3
   
-  spark-client:
+  client:
     build: 
       context: .
-      dockerfile: Dockerfile_spark_client
-    image: spark-client:bde2020-hadoop
-    container_name: sparkcli
-    hostname: sparkcli
+      dockerfile: Dockerfile
+    image: client:bde2020-hadoop
+    container_name: client
+    hostname: client
     environment:
       SERVICE_PRECONDITION: "resourcemanager:8088 mysql:3306"
     volumes:
-      - .:/source
+      - .:/app
     ports:
       - 18080:18080
       - 10000:10000
       - 9083:9083
+      - 8080:8080
     networks:
       - yarn_net
     env_file:
