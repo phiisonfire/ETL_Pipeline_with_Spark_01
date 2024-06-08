@@ -35,9 +35,13 @@ services:
     container_name: sparkcli
     hostname: sparkcli
     environment:
-      SERVICE_PRECONDITION: "resourcemanager:8088"
+      SERVICE_PRECONDITION: "resourcemanager:8088 mysql:3306"
+    volumes:
+      - .:/source
     ports:
       - 18080:18080
+      - 10000:10000
+      - 9083:9083
     networks:
       - yarn_net
     env_file:
