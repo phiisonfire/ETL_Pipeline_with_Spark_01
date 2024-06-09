@@ -2,15 +2,22 @@
 
 1. create database schema for mysql
 
-python scripts/02_create_retail_db_schema.py
+python3 scripts/02_create_retail_db_schema.py
 
 2. load table Product, ProductCategory from .csv files into corresponding tables in mysql
 
-python scripts/01_load_database_table_from_csv.py --csv_table_file_path /home/phinguyen/data_engineering/ETL_Pipeline_with_Spark_01/sample_data/ProductCategory.csv --csv_table_schema_file_path /home/phinguyen/data_engineering/ETL_Pipeline_with_Spark_01/sample_data/ProductCategory.yaml --table_name ProductCategory
-python scripts/01_load_database_table_from_csv.py --csv_table_file_path /home/phinguyen/data_engineering/ETL_Pipeline_with_Spark_01/sample_data/Product.csv --csv_table_schema_file_path /home/phinguyen/data_engineering/ETL_Pipeline_with_Spark_01/sample_data/Product.yaml --table_name Product
+python3 scripts/01_load_database_table_from_csv.py \
+--csv_table_file_path /app/sample_data/ProductCategory.csv \
+--csv_table_schema_file_path /app/sample_data/ProductCategory.yaml \
+--table_name ProductCategory
+
+python3 scripts/01_load_database_table_from_csv.py \
+--csv_table_file_path /app/sample_data/Product.csv \
+--csv_table_schema_file_path /app/sample_data/Product.yaml \
+--table_name Product
 
 3. generating new (fake) data
-python scripts/03_generate_multiple_date_sales_data_with_load.py \
+python3 scripts/03_generate_multiple_date_sales_data_with_load.py \
 -n 10000 \
 -sdate 2024-02-15 \
 -edate 2024-03-15

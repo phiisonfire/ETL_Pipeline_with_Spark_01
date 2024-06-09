@@ -1,18 +1,20 @@
-import os
-from dotenv import load_dotenv
 import mysql.connector
 from mysql.connector import Error
 from src.logger import logging
+import toml
 
-load_dotenv()
+CONFIG_PATH = '/app/configs.toml'
+with open(CONFIG_PATH, 'r') as f:
+    config = toml.load(f)
+mysql_config = config['mysql']
 
 class DBConnection:
     def __init__(self) -> None:
-        self.user = os.getenv('MYSQL_USER')
-        self.password = os.getenv('MYSQL_PASSWORD')
-        self.host = os.getenv('MYSQL_HOST')
-        self.port = os.getenv('MYSQL_PORT')
-        self.database = os.getenv('MYSQL_DATABASE')
+        self.user = mysql_config['user']
+        self.password = mysql_config['password']
+        self.host = mysql_config['host']
+        self.port = mysql_config['port']
+        self.database = mysql_config['database']
         self.connection = None
     
     def connect(self):

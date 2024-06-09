@@ -1,3 +1,4 @@
+toml
 pyspark
 pandas
 numpy
@@ -8,5 +9,5 @@ python-dotenv
 PyYAML
 tqdm
 requests
-apache-airflow==2.9.1
+apache-airflow
 -e .

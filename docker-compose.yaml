@@ -13,8 +13,6 @@ services:
       - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
     expose:
       - 3306
-    ports:
-      - '${MYSQL_PORT}:3306'
     networks:
       - yarn_net
     volumes:

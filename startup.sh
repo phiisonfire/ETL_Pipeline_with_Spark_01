@@ -1,10 +1,10 @@
 #!/bin/bash
 
-# Path to flag file
-FLAG_FILE="/flag_initialized"
+# Path to hive flag file
+HIVE_FLAG_FILE="/hive_flag_initialized"
 
 # Check if flag file exists
-if [ ! -f "$FLAG_FILE" ]; then
+if [ ! -f "$HIVE_FLAG_FILE" ]; then
     echo "Initializing Hive metastore database..."
     # Run initialization command
     hdfs dfs -mkdir       /tmp
@@ -16,7 +16,7 @@ if [ ! -f "$FLAG_FILE" ]; then
     $HIVE_HOME/bin/schematool -dbType mysql -initSchema
 
     # Create flag file to indicate initialization
-    touch "$FLAG_FILE"
+    touch "$HIVE_FLAG_FILE"
 fi
 
 # Hive metastore service
@@ -37,22 +37,33 @@ cd /app
 # Install Python dependencies
 pip install .
 
-# Update airflow.cfg with MySQL connection and load_examples setting
-sed -i "s#sql_alchemy_conn = sqlite:////root/airflow/airflow.db#sql_alchemy_conn = mysql+mysqlconnector://airflow_user:airflow_password@mysql/airflow_db#" /root/airflow/airflow.cfg
-sed -i "s/load_examples = True/load_examples = False/" /root/airflow/airflow.cfg
-sed -i "s#dags_folder = /root/airflow/dags#dags_folder = /app/dags#" /root/airflow/airflow.cfg
+# Path to hive flag file
+AIRFLOW_FLAG_FILE="/airflow_flag_initialized"
 
-# Function to check if the database is already initialized
-is_db_initialized() {
-  airflow db check || return 1
-}
+# Check if flag file exists
+if [ ! -f "$AIRFLOW_FLAG_FILE" ]; then
+    # Initialize Hive airflow backend with defaults
+    airflow db init
 
-# Initialize the Airflow database if it hasn't been initialized
-if is_db_initialized; then
-  echo "Database is already initialized."
-else
-  echo "Initializing the Airflow database..."
-  airflow db init
+    # Change airflow configurations
+    sed -i "s#sql_alchemy_conn = .*#sql_alchemy_conn = mysql+mysqlconnector://airflow_user:airflow_password@mysql/airflow_db#" /root/airflow/airflow.cfg
+    sed -i "s#dags_folder = .*#dags_folder = /app/dags#" /root/airflow/airflow.cfg
+    sed -i "s/load_examples = True/load_examples = False/" /root/airflow/airflow.cfg
+
+    # re-initialize the backend database
+    airflow db init
+
+    # create user
+    airflow users create \
+    --username admin \
+    --password admin \
+    --firstname Admin \
+    --lastname User \
+    --role Admin \
+    --email admin@example.com
+
+    # Create flag file to indicate initialization
+    touch "$AIRFLOW_FLAG_FILE"
 fi
 
 # Start airflow webserver and scheduler
@@ -62,6 +73,7 @@ airflow webserver --port 8080 &
 echo "Starting Airflow scheduler..."
 airflow scheduler &
 
+echo "Starting Airflow scheduler at port 18080..."
 /opt/spark/sbin/start-history-server.sh
 
 tail -f /dev/null

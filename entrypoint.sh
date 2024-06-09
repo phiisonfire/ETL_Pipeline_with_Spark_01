@@ -60,7 +60,7 @@ if [ "$MULTIHOMED_NETWORK" = "1" ]; then
     addProperty /etc/hadoop/mapred-site.xml yarn.nodemanager.bind-host 0.0.0.0
 fi
 
-cp $HIVE_HOME/conf/hive-site.xml $SPARK_HOME/conf/hive-site.xml
+cp /opt/hive/conf/hive-site.xml /opt/spark/conf/hive-site.xml
 
 if [ -n "$GANGLIA_HOST" ]; then
     mv /etc/hadoop/hadoop-metrics.properties /etc/hadoop/hadoop-metrics.properties.orig

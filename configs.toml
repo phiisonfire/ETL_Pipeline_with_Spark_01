@@ -1,0 +1,6 @@
+[mysql]
+user = "oltpadmin"
+password = "oltppwd"
+host = "mysql"
+port = 3306
+database = "retail_db"
