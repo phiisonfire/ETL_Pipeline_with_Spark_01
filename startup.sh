@@ -27,17 +27,6 @@ $HIVE_HOME/bin/hive --service metastore &
 echo "Starting HiveServer2..."
 $HIVE_HOME/bin/hiveserver2 --hiveconf hive.server2.enable.doAs=false &
 
-pip install 
-AIRFLOW_VERSION=2.5.2
-PYTHON_VERSION=3.8
-CONSTRAINT_URL="https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-${PYTHON_VERSION}.txt"
-pip install "apache-airflow[async,postgres,google]==${AIRFLOW_VERSION}" --constraint "${CONSTRAINT_URL}"
-
-# Update airflow.cfg with MySQL connection and load_examples setting
-sed -i "s#sql_alchemy_conn = sqlite:////root/airflow/airflow.db#sql_alchemy_conn = mysql+mysqlconnector://airflow_user:airflow_password@mysql/airflow_db#" /root/airflow/airflow.cfg
-sed -i "s/load_examples = True/load_examples = False/" /root/airflow/airflow.cfg
-sed -i "s#dags_folder = /root/airflow/dags#dags_folder = /app/dags#" /root/airflow/airflow.cfg
-
 # Modify the .env file
 sed -i 's/MYSQL_HOST=127.0.0.1/MYSQL_HOST=mysql/' /app/.env
 sed -i 's/MYSQL_PORT=3307/MYSQL_PORT=3306/' /app/.env
@@ -48,7 +37,10 @@ cd /app
 # Install Python dependencies
 pip install .
 
-
+# Update airflow.cfg with MySQL connection and load_examples setting
+sed -i "s#sql_alchemy_conn = sqlite:////root/airflow/airflow.db#sql_alchemy_conn = mysql+mysqlconnector://airflow_user:airflow_password@mysql/airflow_db#" /root/airflow/airflow.cfg
+sed -i "s/load_examples = True/load_examples = False/" /root/airflow/airflow.cfg
+sed -i "s#dags_folder = /root/airflow/dags#dags_folder = /app/dags#" /root/airflow/airflow.cfg
 
 # Function to check if the database is already initialized
 is_db_initialized() {

@@ -1,5 +1,7 @@
 FROM bde2020/hadoop-base:2.0.0-hadoop3.3.6-java8-ubuntu
 
+SHELL ["/bin/bash", "-c"]
+
 # Install build tools and dependencies
 RUN apt-get update && \
     apt-get install -y build-essential python3-dev python3-pip libffi-dev && \
@@ -8,6 +10,15 @@ RUN apt-get update && \
 RUN printf "<configuration>\n</configuration>\n" > /etc/hadoop/capacity-scheduler.xml \
     && sed -i '/configure \/etc\/hadoop\/mapred-site.xml mapred MAPRED_CONF/ a configure /etc/hadoop/capacity-scheduler.xml capsched CAP_SCHED_CONF' /entrypoint.sh \
     && sed -i 's/addProperty \/etc\/hadoop\/\$module-site.xml \$name \"\$value\"/addProperty \$path \$name \"\$value\"/g' /entrypoint.sh
+
+RUN mkdir -p ~/miniconda3 && \
+    wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda3/miniconda.sh && \
+    bash ~/miniconda3/miniconda.sh -b -u -p ~/miniconda3 && \
+    rm -rf ~/miniconda3/miniconda.sh && \
+    ~/miniconda3/bin/conda init bash && \
+    ~/miniconda3/bin/conda init zsh && \
+    export PATH=/root/miniconda3/bin:$PATH && \
+    ~/miniconda3/bin/conda create -n venv python=3.10.14 -y
 
 # Spark
 ENV SPARK_VERSION=3.5.1
@@ -22,7 +33,7 @@ RUN wget ${SPARK_DOWNLOAD_URL} && \
     echo "export PATH=$PATH:/opt/spark/bin" >> /root/.bashrc && \
     echo "export SPARK_HOME=/opt/spark" >> /root/.bashrc
 
-RUN  echo "export PYSPARK_PYTHON=python3" >> /root/.bashrc
+RUN  echo "export PYSPARK_PYTHON=/root/miniconda3/envs/venv/bin/python" >> /root/.bashrc
 
 RUN mkdir /tmp/spark-events && echo '\
 spark.eventLog.enabled          true \n\
@@ -40,7 +51,7 @@ RUN mkdir /spark-history
 RUN echo '\
 export HADOOP_CONF_DIR=/opt/hadoop-3.3.6/etc/hadoop \n\
 export YARN_CONF_DIR=/opt/hadoop-3.3.6/etc/hadoop \n\
-export PYSPARK_PYTHON=python3 \
+export PYSPARK_PYTHON=/root/miniconda3/envs/venv/bin/python \
 ' > /opt/spark/conf/spark-env.sh
 
 # Hive
@@ -84,5 +95,5 @@ RUN chmod +x /usr/local/bin/entrypoint.sh
 EXPOSE 10000
 EXPOSE 10002
 
-ENTRYPOINT ["entrypoint.sh"]
+ENTRYPOINT ["conda", "run", "-n", "myenv", "/bin/bash", "-c", "/usr/local/bin/entrypoint.sh"]
 CMD startup.sh
