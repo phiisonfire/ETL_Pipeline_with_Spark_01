@@ -2,16 +2,16 @@
 
 1. create database schema for mysql
 
-python3 scripts/02_create_retail_db_schema.py
+python3 scripts/01_create_retail_db_schema.py
 
 2. load table Product, ProductCategory from .csv files into corresponding tables in mysql
 
-python3 scripts/01_load_database_table_from_csv.py \
+python3 scripts/02_load_database_table_from_csv.py \
 --csv_table_file_path /app/sample_data/ProductCategory.csv \
 --csv_table_schema_file_path /app/sample_data/ProductCategory.yaml \
 --table_name ProductCategory
 
-python3 scripts/01_load_database_table_from_csv.py \
+python3 scripts/02_load_database_table_from_csv.py \
 --csv_table_file_path /app/sample_data/Product.csv \
 --csv_table_schema_file_path /app/sample_data/Product.yaml \
 --table_name Product

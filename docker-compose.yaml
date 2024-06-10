@@ -17,7 +17,7 @@ services:
       - yarn_net
     volumes:
       - mysql:/var/lib/mysql
-      - ./docker-entrypoints/mysql/mysql_init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./mysql_init.sql:/docker-entrypoint-initdb.d/init.sql
     command: --local-infile=1
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p${MYSQL_ROOT_PASSWORD} --silent"]
